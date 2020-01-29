@@ -1,10 +1,15 @@
 extern crate slack;
-use slack::{Event, RtmClient, Channel, Message};
+
+mod message_handler;
+
 use std::env;
+use slack::{Event, RtmClient, Channel, Message};
+use message_handler::{MessageHandler, NamuwikiHandler};
 
 struct MyHandler<'a> {
     channel_id: String,
-    cli: Option<&'a RtmClient>
+    cli: Option<&'a RtmClient>,
+    handlers: Vec<&'a dyn MessageHandler>
 }
 
 trait MyHandlerFunc {
@@ -22,6 +27,10 @@ impl<'a> slack::EventHandler for MyHandler<'a> {
              }
              Event::Message(message) => match *message {
                  Message::Standard(msg) => {
+                    for handler in &mut self.handlers {
+                         // handler.on_message(&msg);
+                     }
+
                      let user_id = msg.user.expect("");
                      if user_id == "some_id" {
                          // let _ = cli.sender().send_message(&mut self.channel_id, "<@some_id> 맞춤법 지키세요!");
@@ -50,7 +59,7 @@ impl<'a> slack::EventHandler for MyHandler<'a> {
         .and_then(|chan| chan.id.as_ref())
         .expect("random channel not found");
 
-        self.channel_id.push_str(channel_id);
+        self.channel_id = channel_id.clone();
     }
 
     fn on_close(&mut self, cli: &RtmClient) {
@@ -66,7 +75,10 @@ impl<'a> MyHandlerFunc for MyHandler<'a> {
 
 fn main() {
     let token = env::var("token").unwrap();
-    let mut handler = MyHandler{channel_id: String::new(), cli: None};
+    let mut handler = MyHandler{channel_id: String::new(), cli: None, handlers: Vec::new()};
+
+    let mut namu_handler = NamuwikiHandler;
+    handler.handlers.push(&mut namu_handler);
 
     let cli = RtmClient::login(&token).unwrap();
     handler.cli.replace(&cli);

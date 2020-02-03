@@ -2,10 +2,11 @@ extern crate slack;
 
 mod namuwiki_handler;
 
-pub use namuwiki_handler::NamuwikiHandler;
-
+use slack::RtmClient;
 use slack::api::MessageStandard;
 
+pub use namuwiki_handler::NamuwikiHandler;
+
 pub trait MessageHandler {
-    fn on_message(&mut self, msg: &MessageStandard);
+    fn on_message(&mut self, cli: &RtmClient, msg: &MessageStandard);
 }

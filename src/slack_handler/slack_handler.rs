@@ -2,15 +2,12 @@ extern crate slack;
 
 use slack::{Event, RtmClient, Channel, Message};
 use crate::message_handler::MessageHandler;
+use crate::slack_handler::{SlackClientWrapper, SlackClientWrapperFunc};
 
 pub struct SlackHandler<'a> {
     pub channel_id: String,
-    pub cli: Option<&'a RtmClient>,
+    pub cli: &'a mut SlackClientWrapper<'a>,
     pub handlers: Vec<Box<dyn MessageHandler>>
-}
-
-pub trait SlackHandlerFunc {
-    fn send(&mut self, msg: &str);
 }
 
 #[allow(unused_variables)]
@@ -20,12 +17,12 @@ impl<'a> slack::EventHandler for SlackHandler<'a> {
 
          match event {
              Event::Hello => {
-                 self.send("Hello World! (rtm)");
+                 self.cli.send(&self.channel_id, "Hello World! (rtm)");
              }
              Event::Message(message) => match *message {
                  Message::Standard(msg) => {
                      for handler in &mut self.handlers {
-                         handler.on_message(self.cli.unwrap(), &msg);
+                         handler.on_message(&mut *self.cli, &msg);
                      }
 
                      let user_id = msg.user.expect("");
@@ -61,11 +58,5 @@ impl<'a> slack::EventHandler for SlackHandler<'a> {
 
     fn on_close(&mut self, cli: &RtmClient) {
         println!("on_close");
-    }
-}
-
-impl<'a> SlackHandlerFunc for SlackHandler<'a> {
-    fn send(&mut self, msg: &str) {
-        let _ = self.cli.unwrap().sender().send_message(&mut self.channel_id, msg);
     }
 }

@@ -42,11 +42,11 @@ impl<'a> slack::EventHandler for SlackHandler<'a> {
             .iter()
             .find(|chan: &&Channel| match chan.name {
                 None => false,
-                Some(ref name) => name == "random",
+                Some(ref name) => name == "ditto_test",
             })
         })
         .and_then(|chan| chan.id.as_ref())
-        .expect("random channel not found");
+        .expect("ditto_test channel not found");
 
         self.channel_id = channel_id.clone();
     }

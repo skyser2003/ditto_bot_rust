@@ -1,5 +1,3 @@
-extern crate slack;
-
 mod namuwiki_handler;
 pub use namuwiki_handler::NamuwikiHandler;
 

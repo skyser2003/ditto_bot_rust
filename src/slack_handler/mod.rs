@@ -1,5 +1,3 @@
-extern crate slack;
-
 mod slack_handler;
 mod client_wrapper;
 

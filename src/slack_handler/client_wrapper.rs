@@ -1,5 +1,3 @@
-extern crate slack;
-
 use slack::RtmClient;
 
 pub struct SlackClientWrapper<'a> {

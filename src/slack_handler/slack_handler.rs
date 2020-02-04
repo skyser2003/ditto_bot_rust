@@ -1,5 +1,3 @@
-extern crate slack;
-
 use slack::{Event, RtmClient, Channel, Message};
 use crate::message_handler::MessageHandler;
 use crate::slack_handler::{SlackClientWrapper, SlackClientWrapperFunc};

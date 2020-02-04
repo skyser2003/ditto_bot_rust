@@ -24,11 +24,6 @@ impl<'a> slack::EventHandler for SlackHandler<'a> {
                      for handler in &mut self.handlers {
                          handler.on_message(&mut *self.cli, &msg);
                      }
-
-                     let user_id = msg.user.expect("");
-                     if user_id == "some_id" {
-                         // let _ = cli.sender().send_message(&mut self.channel_id, "<@some_id> 맞춤법 지키세요!");
-                     }
                  }
                  _ => {}
              }

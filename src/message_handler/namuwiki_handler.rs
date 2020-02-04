@@ -1,6 +1,3 @@
-extern crate slack;
-extern crate regex;
-
 use slack::api::MessageStandard;
 use regex::Regex;
 use url::{Url, Host, Position};

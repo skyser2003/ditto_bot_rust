@@ -21,6 +21,10 @@ impl Default for NamuwikiHandler {
 impl MessageHandler for NamuwikiHandler {
     fn on_message(&mut self, cli: &mut SlackClientWrapper, msg: &MessageStandard) {
         let raw_text = msg.text.as_ref().unwrap();
+        
+        if raw_text.len() == 0 {
+            return
+        }
 
         if raw_text.chars().next().unwrap() != '<' || raw_text.chars().last().unwrap() != '>' {
             return

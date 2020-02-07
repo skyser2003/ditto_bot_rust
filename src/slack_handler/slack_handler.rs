@@ -26,6 +26,8 @@ impl<'a> slack::EventHandler for SlackHandler<'a> {
                     println!("on_event(Message: {:?})", message);
                  }
              }
+             Event::UserTyping {channel, user} => {
+             }
              _ => {
                 println!("on_event(event: {:?})", event);
              }

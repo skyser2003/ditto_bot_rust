@@ -1,6 +1,6 @@
 use slack::api::MessageStandard;
 use regex::Regex;
-use url::{Url, Host, Position};
+use url::Url;
 use reqwest;
 
 use crate::message_handler::MessageHandler;

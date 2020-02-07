@@ -11,21 +11,24 @@ pub struct SlackHandler<'a> {
 #[allow(unused_variables)]
 impl<'a> slack::EventHandler for SlackHandler<'a> {
     fn on_event(&mut self, cli: &RtmClient, event: Event) {
-         println!("on_event(event: {:?})", event);
-
          match event {
              Event::Hello => {
                  self.cli.send_message(&self.channel_id, "Hello World! (rtm)");
              }
              Event::Message(message) => match *message {
                  Message::Standard(msg) => {
+                     println!("on_event(MessageStandard: {:?})", msg.text.as_ref().unwrap());
                      for handler in &mut self.handlers {
                          handler.on_message(&mut *self.cli, &msg);
                      }
                  }
-                 _ => {}
+                 _ => {
+                    println!("on_event(Message: {:?})", message);
+                 }
              }
-             _ => {}
+             _ => {
+                println!("on_event(event: {:?})", event);
+             }
          }
     }
 

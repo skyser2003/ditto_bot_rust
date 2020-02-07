@@ -15,7 +15,7 @@ impl<'a> slack::EventHandler for SlackHandler<'a> {
 
          match event {
              Event::Hello => {
-                 self.cli.send(&self.channel_id, "Hello World! (rtm)");
+                 self.cli.send_message(&self.channel_id, "Hello World! (rtm)");
              }
              Event::Message(message) => match *message {
                  Message::Standard(msg) => {

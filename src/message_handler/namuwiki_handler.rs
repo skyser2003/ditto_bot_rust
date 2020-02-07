@@ -44,9 +44,7 @@ impl MessageHandler for NamuwikiHandler {
                     cli.send_link(msg.channel.as_ref().unwrap(), title.as_str(), parsed_url.as_str());
                 }
             }
-            Err(_) => {} // Not a URL
+            Err(_) => {}
         }
-
-        // cli.send(msg.channel.as_ref().unwrap(), "안녕?");
     }
 }

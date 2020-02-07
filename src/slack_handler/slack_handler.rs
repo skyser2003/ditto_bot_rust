@@ -17,7 +17,7 @@ impl<'a> slack::EventHandler for SlackHandler<'a> {
              }
              Event::Message(message) => match *message {
                  Message::Standard(msg) => {
-                     println!("on_event(MessageStandard: {:?})", msg.text.as_ref().unwrap());
+                     println!("on_event({}: {})", msg.user.as_ref().unwrap(), msg.text.as_ref().unwrap());
                      for handler in &mut self.handlers {
                          handler.on_message(&mut *self.cli, &msg);
                      }

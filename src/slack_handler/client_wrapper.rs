@@ -12,24 +12,24 @@ pub trait SlackClientWrapperFunc {
 impl<'a> SlackClientWrapperFunc for SlackClientWrapper<'a> {
     fn send_link(&mut self, channel_id: &str, link_text: &str, link_url: &str) {
         let raw_json = format!(r#"{{
-			"channel": "{}",
-			"text": "",
-			"unfurl_media": true,
-			"unfurl_links": true,
-			"attachments": [
-				{{
-					"fallback": "{}",
-					"actions": [
-						{{
-							"type": "button",
-							"text": "{}",
-							"url": "{}",
-							"style": "primary"
-						}}
-					]
-				}}
-			]
-        }}"#, channel_id, link_text, link_text, link_url);
+            "channel": "{}",
+			"blocks": [
+                {{
+                    "type": "actions",
+                    "elements": [
+                        {{
+                            "type": "button",
+                            "text": {{
+                                "type": "plain_text",
+                                "text": "Farmhouse",
+                                "emoji": true
+                            }},
+                            "value": "click_me_123"
+                        }}
+                    ]
+                }}
+            ]
+        }}"#, channel_id);
 
         println!("{}", raw_json);
 

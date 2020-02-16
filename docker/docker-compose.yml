@@ -1,0 +1,10 @@
+version: "3.7"
+
+services:
+  ditto_bot:
+    build:
+      context: ..
+      dockerfile: docker/dockerfile
+    image: registry.skyser.kr/shipduck/ditto_bot_rust
+    environment:
+      - token=$token

@@ -8,3 +8,5 @@ services:
     image: registry.skyser.kr/shipduck/ditto_bot_rust
     environment:
       - token=$token
+    ports:
+      - 2525:80

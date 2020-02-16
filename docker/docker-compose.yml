@@ -4,7 +4,7 @@ services:
   ditto_bot:
     build:
       context: ..
-      dockerfile: docker/dockerfile
+      dockerfile: docker/Dockerfile
     image: registry.skyser.kr/shipduck/ditto_bot_rust
     environment:
       - token=$token

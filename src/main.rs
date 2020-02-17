@@ -1,9 +1,15 @@
 use std::env;
-use actix_web::{get, web, App, HttpServer, Responder};
+use actix_web::{get, post, web, App, HttpServer, Responder};
 use serde::Deserialize;
 
+struct SlackApiBase {
+    token: String,
+    r#type: String
+}
 #[derive(Deserialize)]
 struct SlackChallenge {
+    token: String,
+    r#type: String,
     challenge: String
 }
 
@@ -12,17 +18,18 @@ async fn index(info: web::Path<(u32, String)>) -> impl Responder {
     format!("Hello {}! id: {}", info.1, info.0)
 }
 
-async fn slack_challenge(web::Query(query): web::Query<SlackChallenge>) -> impl Responder {
-    query.challenge
+#[post("/")]
+async fn slack_challenge(body: web::Json<SlackChallenge>) -> impl Responder {
+    body.challenge.clone()
 }
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
     let token = env::var("token").unwrap();
-    
+
     let app = || App::new()
     .service(index)
-    .service(web::resource("/").route(web::get().to(slack_challenge)));
+    .service(slack_challenge);
 
     HttpServer::new(app)
     .bind("0.0.0.0:80")?

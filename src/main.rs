@@ -62,9 +62,15 @@ async fn slack_api_response(mut body: web::Payload) -> Result<HttpResponse, Erro
             let msg: SlackChallenge = serde_json::from_str(&body_str)?;
             Ok(HttpResponse::Ok().body(msg.challenge.clone()))
         }
-        "message.channels" => {
-            let msg: SlackMessage = serde_json::from_str(&body_str)?;
-            Ok(HttpResponse::Ok().body("booboo"))
+        "event_callback" => {
+            if parsed_raw["event"]["channel_type"] == "channel" {
+                let msg: SlackMessage = serde_json::from_str(&body_str)?;
+                println!("This is normal message");
+                Ok(HttpResponse::Ok().body("this is message"))
+            }
+            else {
+                Ok(HttpResponse::Ok().body("booboo"))
+            }
         }
         &_ => Ok(HttpResponse::Ok().finish())
     }

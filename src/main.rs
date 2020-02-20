@@ -72,6 +72,9 @@ async fn slack_api_response(mut body: web::Payload) -> Result<HttpResponse, Erro
                 Ok(HttpResponse::Ok().body("booboo"))
             }
         }
+        "link_shared" => {
+            Ok(HttpResponse::Ok().body("booboo"))
+        }
         &_ => Ok(HttpResponse::Ok().finish())
     }
 }

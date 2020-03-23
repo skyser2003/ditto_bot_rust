@@ -51,10 +51,28 @@ impl Handler<slack::EventCallback> for SlackEventActor {
                         }
                     }
 
-                    let reply = PostMessage {
+                    let reply = slack::PostMessage {
                         channel: slack_msg.channel.unwrap(),
                         text: "hello, world".to_string(),
+                        blocks: Some(
+                            vec![
+                                slack::LayoutBlock::Section(
+                                    slack::SectionLayout {
+                                        text: slack::TextObject {
+                                            ty: "plain_text".to_string(),
+                                            text: "hello, block world".to_string(),
+                                            emoji: None,
+                                            verbatim: None,
+                                        },
+                                        block_id: None,
+                                        fields: None,
+                                    }
+                                ),
+                            ]
+                        ),
                     };
+
+                    println!("Reply: {:?}", serde_json::to_string(&reply)?);
 
                     let request = self.slack_client
                         .post("https://slack.com/api/chat.postMessage")
@@ -62,7 +80,8 @@ impl Handler<slack::EventCallback> for SlackEventActor {
                         .header("Authorization", "Bearer ".to_string() + &self.bot_token)
                         .json(&reply);
 
-                    request.send();
+                    let resp = request.send();
+                    println!("Reponse from reply: {:?}", resp.unwrap().text().unwrap());
                 }
             },
         }
@@ -73,12 +92,6 @@ impl Handler<slack::EventCallback> for SlackEventActor {
 struct AppState {
     sender: Addr<SlackEventActor>,
     signing_secret: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct PostMessage {
-    channel: String,
-    text: String,
 }
 
 struct ByteBuf<'a>(&'a [u8]);

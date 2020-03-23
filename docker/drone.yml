@@ -4,7 +4,7 @@ name: ditto_bot_rust
 
 platform:
   os: linux
-  arch: arm
+  arch: arm64
 
 steps:
 - name: build

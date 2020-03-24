@@ -4,7 +4,6 @@ use actix_web::http::StatusCode;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
 
 use anyhow::{anyhow, Error};
-use serde_derive::Serialize;
 
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 

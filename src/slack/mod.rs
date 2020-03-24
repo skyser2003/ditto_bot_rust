@@ -35,8 +35,12 @@ pub struct ButtonBlock<'a> {
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum BlockElement<'a> {
-    RichTextSection { elements: Vec<Box<BlockElement<'a>>> },
-    Text { text: &'a str },
+    RichTextSection {
+        elements: Vec<Box<BlockElement<'a>>>,
+    },
+    Text {
+        text: &'a str,
+    },
     Button(ButtonBlock<'a>),
     Section(SectionBlock<'a>),
 }

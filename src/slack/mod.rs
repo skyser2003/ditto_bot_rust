@@ -1,7 +1,28 @@
 use serde_derive::{Serialize, Deserialize};
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct TextObject {
+    #[serde(rename = "type")]
+    pub ty: String, //plain_text or mkdwn
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub emoji: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verbatim: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SectionBlock {
+    pub text: TextObject,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fields: Option<Vec<TextObject>>,
+    //pub accessory: 
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BlockElementButton {
+pub struct ButtonBlock {
     #[serde(rename = "type")]
     pub ty: String,
     pub action_id: String,
@@ -16,7 +37,8 @@ pub struct BlockElementButton {
 pub enum BlockElement {
     RichTextSection { elements: Vec<Box<BlockElement>> },
     Text { text: String },
-    Button(BlockElementButton),
+    Button(ButtonBlock),
+    Section(SectionBlock),
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -62,6 +84,7 @@ pub struct Message {
     pub ts: String,
     pub user: Option<String>,
     pub user_team: Option<String>,
+    pub bot_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -107,39 +130,13 @@ pub enum SlackEvent {
 /**
  * Sent from client.
  */
-#[derive(Clone, Debug, Serialize)]
-pub struct TextObject {
-    #[serde(rename = "type")]
-    pub ty: String, //plain_text or mkdwn
-    pub text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub emoji: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub verbatim: Option<bool>,
-}
 
-#[derive(Clone, Debug, Serialize)]
-pub struct SectionLayout {
-    pub text: TextObject,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub block_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fields: Option<Vec<TextObject>>,
-    //pub accessory: 
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "snake_case")]
-pub enum LayoutBlock {
-    Section(SectionLayout)
-}
 
 #[derive(Clone, Debug, Serialize)]
 pub struct PostMessage {
     pub channel: String,
     pub text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub blocks: Option<Vec<LayoutBlock>>,
+    pub blocks: Option<Vec<BlockElement>>,
     // pub as_user: Option<bool>,
 }

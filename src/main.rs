@@ -56,8 +56,8 @@ impl Handler<slack::EventCallback> for SlackEventActor {
                         text: "hello, world".to_string(),
                         blocks: Some(
                             vec![
-                                slack::LayoutBlock::Section(
-                                    slack::SectionLayout {
+                                slack::BlockElement::Section(
+                                    slack::SectionBlock {
                                         text: slack::TextObject {
                                             ty: "plain_text".to_string(),
                                             text: "hello, block world".to_string(),

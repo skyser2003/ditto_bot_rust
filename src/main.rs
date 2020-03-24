@@ -136,7 +136,7 @@ async fn normal_handler(req: HttpRequest, body: String, state: web::Data<AppStat
         };
 
     {
-        let cur_timestamp = 
+        let cur_timestamp =
             std::time::SystemTime::now().duration_since(
                 std::time::SystemTime::UNIX_EPOCH
             )
@@ -154,7 +154,7 @@ async fn normal_handler(req: HttpRequest, body: String, state: web::Data<AppStat
     let mut mac = Hmac::<Sha256>::new_varkey(state.signing_secret.as_bytes()).expect("");
     mac.input(signature_base_string.as_bytes());
 
-    let calculated_signature = 
+    let calculated_signature =
         format!("v0={:02x}", ByteBuf(&mac.result().code().as_slice()));
 
     if slack_signature != calculated_signature {
@@ -207,7 +207,7 @@ fn main() -> std::io::Result<()> {
         Ok(val) => val,
         Err(_e) => panic!("Secret bot token is not given."),
     };
-    
+
     let system = System::new("slack");
 
     let slack_event_actor = SyncArbiter::start(1, move || SlackEventActor {
@@ -220,17 +220,7 @@ fn main() -> std::io::Result<()> {
     let _ = std::thread::spawn(move || {
         let system = System::new("http");
 
-        let mut ssl_builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-
-        ssl_builder
-            .set_private_key_file("PRIVATE_KEY.pem", SslFiletype::PEM)
-            .unwrap();
-        
-        ssl_builder
-            .set_certificate_chain_file("PUBLIC_KEY.pem")
-            .unwrap();
-
-        let srv = HttpServer::new(move || { 
+        let mut http_srv = HttpServer::new(move || {
             App::new()
                 .data(AppState {
                     sender: slack_event_actor.clone(),
@@ -238,16 +228,36 @@ fn main() -> std::io::Result<()> {
                 })
                 .route("/", web::post().to(normal_handler))
                 .route("/", web::get().to(normal_handler))
-            })
-            .bind_openssl("0.0.0.0:14475", ssl_builder).unwrap()
-            .run();
+            });
 
-        /* TODO:
         let use_ssl = match env::var("USE_SSL") {
-            Ok(val) => true,
+            Ok(val) => val.parse().unwrap_or(false),
             Err(_e) => false,
         };
-        */
+
+        if use_ssl {
+
+            println!("Trying to bind ssl.");
+
+            let mut ssl_builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+
+            ssl_builder
+                .set_private_key_file("PRIVATE_KEY.pem", SslFiletype::PEM)
+                .unwrap();
+
+            ssl_builder
+                .set_certificate_chain_file("PUBLIC_KEY.pem")
+                .unwrap();
+
+            http_srv = http_srv.bind_openssl("0.0.0.0:14475", ssl_builder).unwrap();
+        } else {
+
+            println!("Trying to bind http.");
+
+            http_srv = http_srv.bind("0.0.0.0:80").unwrap();
+        }
+
+        let srv = http_srv.run();
 
         let _ = tx.send(srv);
 
@@ -269,7 +279,7 @@ fn main() -> std::io::Result<()> {
         main_sys.stop();
         println!("Stopped.");
     }).expect("Fail to set Ctrl-C handler.");
-        
+
     system.run()
 }
 

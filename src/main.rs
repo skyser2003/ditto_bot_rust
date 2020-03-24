@@ -24,13 +24,12 @@ struct MessageEvent {
 
 impl MessageEvent {
     fn from_slack_event(msg: &slack::Message) -> Result<Self, Error> {
-        if msg.subtype.is_none() && msg.user.is_some() {
-            Ok(Self {
-                user: msg.user.as_ref().unwrap().to_string(),
-                channel: msg.channel.as_ref().unwrap().to_string(),
-            })
-        } else {
-            Err(anyhow!("Invalid event"))
+        match msg {
+            slack::Message::BasicMessage(msg) => Ok(Self {
+                user: msg.user.to_string(),
+                channel: msg.channel.to_string(),
+            }),
+            _ => Err(anyhow!("Invalid event")),
         }
     }
 }

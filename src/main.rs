@@ -3,6 +3,7 @@ use actix::System;
 use actix_web::http::StatusCode;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
 
+use anyhow::{anyhow, Error};
 use serde_derive::Serialize;
 
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
@@ -17,12 +18,31 @@ use std::env;
 
 mod slack;
 
-impl Message for slack::EventCallback {
-    type Result = Result<(), std::io::Error>;
+struct MessageEvent {
+    user: String,
+    channel: String,
+}
+
+impl MessageEvent {
+    fn from_slack_event(msg: &slack::Message) -> Result<Self, Error> {
+        if msg.subtype.is_none() && msg.user.is_some() {
+            Ok(Self {
+                user: msg.user.as_ref().unwrap().to_string(),
+                channel: msg.channel.as_ref().unwrap().to_string(),
+            })
+        } else {
+            Err(anyhow!("Invalid event"))
+        }
+    }
+}
+
+impl Message for MessageEvent {
+    type Result = Result<(), Error>;
 }
 
 struct SlackEventActor {
     bot_token: String,
+    bot_id: String,
     slack_client: reqwest::blocking::Client,
 }
 
@@ -30,55 +50,39 @@ impl Actor for SlackEventActor {
     type Context = SyncContext<Self>;
 }
 
-impl Handler<slack::EventCallback> for SlackEventActor {
-    type Result = Result<(), std::io::Error>;
+impl Handler<MessageEvent> for SlackEventActor {
+    type Result = Result<(), Error>;
 
-    fn handle(&mut self, msg: slack::EventCallback, _: &mut Self::Context) -> Self::Result {
-        //TODO: remove hardcoded value
-        let bot_id = "URS3HL8SD".to_string();
-
-        match msg.event {
-            slack::InternalEvent::Message(slack_msg) => {
-                if slack_msg.subtype == None {
-                    match &slack_msg.user {
-                        Some(ref user_list) => {
-                            if user_list.contains(&bot_id) {
-                                return Ok(());
-                            }
-                        }
-                        None => {
-                            return Ok(());
-                        }
-                    }
-
-                    let reply = slack::PostMessage {
-                        channel: slack_msg.channel.unwrap(),
-                        text: "hello, world".to_string(),
-                        blocks: Some(vec![slack::BlockElement::Section(slack::SectionBlock {
-                            text: slack::TextObject {
-                                ty: "plain_text".to_string(),
-                                text: "hello, block world".to_string(),
-                                emoji: None,
-                                verbatim: None,
-                            },
-                            block_id: None,
-                            fields: None,
-                        })]),
-                    };
-
-                    println!("Reply: {:?}", serde_json::to_string(&reply)?);
-                    let request = self
-                        .slack_client
-                        .post("https://slack.com/api/chat.postMessage")
-                        .header("Content-type", "application/json; charset=utf-8")
-                        .header("Authorization", "Bearer ".to_string() + &self.bot_token)
-                        .json(&reply);
-
-                    let resp = request.send();
-                    println!("Reponse from reply: {:?}", resp.unwrap().text().unwrap());
-                }
-            }
+    fn handle(&mut self, msg: MessageEvent, _: &mut Self::Context) -> Self::Result {
+        if msg.user.contains(&self.bot_id) {
+            return Ok(());
         }
+
+        let reply = slack::PostMessage {
+            channel: msg.channel,
+            text: "hello, world".to_string(),
+            blocks: Some(vec![slack::BlockElement::Section(slack::SectionBlock {
+                text: slack::TextObject {
+                    ty: "plain_text".to_string(),
+                    text: "hello, block world".to_string(),
+                    emoji: None,
+                    verbatim: None,
+                },
+                block_id: None,
+                fields: None,
+            })]),
+        };
+
+        println!("Reply: {:?}", serde_json::to_string(&reply)?);
+        let request = self
+            .slack_client
+            .post("https://slack.com/api/chat.postMessage")
+            .header("Content-type", "application/json; charset=utf-8")
+            .header("Authorization", "Bearer ".to_string() + &self.bot_token)
+            .json(&reply);
+
+        let resp = request.send();
+        println!("Reponse from reply: {:?}", resp.unwrap().text().unwrap());
         Ok(())
     }
 }
@@ -152,13 +156,19 @@ async fn normal_handler(
         let posted_event: slack::SlackEvent = serde_json::from_str(&body)?;
 
         match posted_event {
-            slack::SlackEvent::UrlVerification { ref challenge, .. } => {
+            slack::SlackEvent::UrlVerification { challenge, .. } => {
                 Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("application/x-www-form-urlencoded")
-                    .body(challenge))
+                    .body(challenge.to_string()))
             }
             slack::SlackEvent::EventCallback(event_callback) => {
-                state.sender.do_send(event_callback);
+                match event_callback.event {
+                    slack::InternalEvent::Message(message) => {
+                        if let Ok(message) = MessageEvent::from_slack_event(&message) {
+                            state.sender.do_send(message)
+                        }
+                    }
+                };
                 Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("text/html; charset=utf-8")
                     .body(body))
@@ -188,6 +198,7 @@ fn main() -> std::io::Result<()> {
 
     let slack_event_actor = SyncArbiter::start(1, move || SlackEventActor {
         bot_token: bot_token.clone(),
+        bot_id: "URS3HL8SD".to_string(), //TODO: remove hardcoded value
         slack_client: reqwest::blocking::Client::new(),
     });
 

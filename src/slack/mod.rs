@@ -1,10 +1,10 @@
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct TextObject {
+pub struct TextObject<'a> {
     #[serde(rename = "type")]
-    pub ty: String, //plain_text or mkdwn
-    pub text: String,
+    pub ty: &'a str, //plain_text or mkdwn
+    pub text: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emoji: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -12,41 +12,41 @@ pub struct TextObject {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct SectionBlock {
-    pub text: TextObject,
+pub struct SectionBlock<'a> {
+    pub text: TextObject<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub block_id: Option<String>,
+    pub block_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fields: Option<Vec<TextObject>>,
+    pub fields: Option<Vec<TextObject<'a>>>,
     //pub accessory:
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ButtonBlock {
+pub struct ButtonBlock<'a> {
     #[serde(rename = "type")]
-    pub ty: String,
-    pub action_id: String,
-    pub url: Option<String>,
-    pub value: Option<String>,
-    pub style: Option<String>, //primary or danger
+    pub ty: &'a str,
+    pub action_id: &'a str,
+    pub url: Option<&'a str>,
+    pub value: Option<&'a str>,
+    pub style: Option<&'a str>, //primary or danger
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
-pub enum BlockElement {
-    RichTextSection { elements: Vec<Box<BlockElement>> },
-    Text { text: String },
-    Button(ButtonBlock),
-    Section(SectionBlock),
+pub enum BlockElement<'a> {
+    RichTextSection { elements: Vec<Box<BlockElement<'a>>> },
+    Text { text: &'a str },
+    Button(ButtonBlock<'a>),
+    Section(SectionBlock<'a>),
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Block {
-    pub block_id: String,
-    pub elements: Vec<BlockElement>,
+pub struct Block<'a> {
+    pub block_id: &'a str,
+    pub elements: Vec<BlockElement<'a>>,
     #[serde(rename = "type")]
-    pub ty: String,
+    pub ty: &'a str,
 }
 
 #[derive(Debug, Deserialize)]
@@ -271,8 +271,8 @@ pub enum SlackEvent<'a> {
 #[derive(Debug, Serialize)]
 pub struct PostMessage<'a> {
     pub channel: &'a str,
-    pub text: &'a str,
+    pub text: &'a str, // alternative text when blocks are not given (or cannot be displayed).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub blocks: Option<Vec<BlockElement>>,
+    pub blocks: Option<Vec<BlockElement<'a>>>,
     // pub as_user: Option<bool>,
 }

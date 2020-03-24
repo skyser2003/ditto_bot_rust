@@ -135,9 +135,9 @@ pub enum SlackEvent {
  */
 
 #[derive(Clone, Debug, Serialize)]
-pub struct PostMessage {
-    pub channel: String,
-    pub text: String,
+pub struct PostMessage<'a> {
+    pub channel: &'a str,
+    pub text: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocks: Option<Vec<BlockElement>>,
     // pub as_user: Option<bool>,

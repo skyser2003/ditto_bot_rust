@@ -58,13 +58,15 @@ impl Handler<MessageEvent> for SlackEventActor {
             return Ok(());
         }
 
+        let msg_text = format!("hello, {}", msg.user);
+
         let reply = slack::PostMessage {
-            channel: msg.channel,
-            text: "hello, world".to_string(),
+            channel: &msg.channel,
+            text: "hello, world",
             blocks: Some(vec![slack::BlockElement::Section(slack::SectionBlock {
                 text: slack::TextObject {
                     ty: "plain_text".to_string(),
-                    text: "hello, block world".to_string(),
+                    text: msg_text,
                     emoji: None,
                     verbatim: None,
                 },

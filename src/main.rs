@@ -1,15 +1,15 @@
-use actix::System;
 use actix::prelude::*;
-use actix_web::http::{StatusCode};
-use actix_web::{web, App, HttpRequest, HttpServer, HttpResponse, Result};
+use actix::System;
+use actix_web::http::StatusCode;
+use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
 
-use serde_derive::{Serialize};
+use serde_derive::Serialize;
 
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 
 use ctrlc;
-use sha2::Sha256;
 use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 use futures::executor;
 
@@ -54,27 +54,21 @@ impl Handler<slack::EventCallback> for SlackEventActor {
                     let reply = slack::PostMessage {
                         channel: slack_msg.channel.unwrap(),
                         text: "hello, world".to_string(),
-                        blocks: Some(
-                            vec![
-                                slack::BlockElement::Section(
-                                    slack::SectionBlock {
-                                        text: slack::TextObject {
-                                            ty: "plain_text".to_string(),
-                                            text: "hello, block world".to_string(),
-                                            emoji: None,
-                                            verbatim: None,
-                                        },
-                                        block_id: None,
-                                        fields: None,
-                                    }
-                                ),
-                            ]
-                        ),
+                        blocks: Some(vec![slack::BlockElement::Section(slack::SectionBlock {
+                            text: slack::TextObject {
+                                ty: "plain_text".to_string(),
+                                text: "hello, block world".to_string(),
+                                emoji: None,
+                                verbatim: None,
+                            },
+                            block_id: None,
+                            fields: None,
+                        })]),
                     };
 
                     println!("Reply: {:?}", serde_json::to_string(&reply)?);
-
-                    let request = self.slack_client
+                    let request = self
+                        .slack_client
                         .post("https://slack.com/api/chat.postMessage")
                         .header("Content-type", "application/json; charset=utf-8")
                         .header("Authorization", "Bearer ".to_string() + &self.bot_token)
@@ -83,7 +77,7 @@ impl Handler<slack::EventCallback> for SlackEventActor {
                     let resp = request.send();
                     println!("Reponse from reply: {:?}", resp.unwrap().text().unwrap());
                 }
-            },
+            }
         }
         Ok(())
     }
@@ -105,88 +99,70 @@ impl<'a> std::fmt::LowerHex for ByteBuf<'a> {
     }
 }
 
-async fn normal_handler(req: HttpRequest, body: String, state: web::Data<AppState>) -> Result<HttpResponse> {
+async fn normal_handler(
+    req: HttpRequest,
+    body: String,
+    state: web::Data<AppState>,
+) -> Result<HttpResponse> {
     println!("REQ: {:?}", req);
     println!("Body: {:?}", body);
 
+    let content_str = if let Some(i) = req.headers().get("content-type") {
+        i.to_str().unwrap()
+    } else {
+        ""
+    };
 
-    let content_str =
-        if let Some(i) = req.headers().get("content-type") {
-            i.to_str().unwrap()
-        } else {
-            ""
-        };
+    let slack_signature: &str = if let Some(sig) = req.headers().get("X-Slack-Signature") {
+        sig.to_str().unwrap()
+    } else {
+        return Ok(HttpResponse::Unauthorized().finish());
+    };
 
-    let slack_signature: &str =
-        if let Some(sig) = req.headers().get("X-Slack-Signature") {
-            sig.to_str().unwrap()
-        } else {
-            return Ok(
-                HttpResponse::Unauthorized().finish()
-            );
-        };
-
-    let slack_timestamp: &str =
-        if let Some(sig) = req.headers().get("X-Slack-Request-Timestamp") {
-            sig.to_str().unwrap()
-        } else {
-            return Ok(
-                HttpResponse::Unauthorized().finish()
-            );
-        };
+    let slack_timestamp: &str = if let Some(sig) = req.headers().get("X-Slack-Request-Timestamp") {
+        sig.to_str().unwrap()
+    } else {
+        return Ok(HttpResponse::Unauthorized().finish());
+    };
 
     {
-        let cur_timestamp =
-            std::time::SystemTime::now().duration_since(
-                std::time::SystemTime::UNIX_EPOCH
-            )
+        let cur_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap()
-            .checked_sub(
-                std::time::Duration::from_secs(slack_timestamp.parse::<u64>().unwrap())
-            );
+            .checked_sub(std::time::Duration::from_secs(
+                slack_timestamp.parse::<u64>().unwrap(),
+            ));
         println!("now: {:?}", cur_timestamp);
         //TODO: check replay attack
     }
 
-    let signature_base_string: String =
-        format!("v0:{}:{}", slack_timestamp, body);
+    let signature_base_string: String = format!("v0:{}:{}", slack_timestamp, body);
 
     let mut mac = Hmac::<Sha256>::new_varkey(state.signing_secret.as_bytes()).expect("");
     mac.input(signature_base_string.as_bytes());
 
-    let calculated_signature =
-        format!("v0={:02x}", ByteBuf(&mac.result().code().as_slice()));
+    let calculated_signature = format!("v0={:02x}", ByteBuf(&mac.result().code().as_slice()));
 
     if slack_signature != calculated_signature {
-        return Ok(
-            HttpResponse::Unauthorized().finish()
-        );
+        return Ok(HttpResponse::Unauthorized().finish());
     }
     println!("Success to verify a slack's signature.");
 
     if content_str.contains("json") {
-
         let posted_event: slack::SlackEvent = serde_json::from_str(&body)?;
 
         match posted_event {
-            slack::SlackEvent::UrlVerification {
-                ref challenge,
-                ..
-            } => {
-                Ok(
-                    HttpResponse::build(StatusCode::OK)
-                        .content_type("application/x-www-form-urlencoded")
-                        .body(challenge)
-                )
-            },
+            slack::SlackEvent::UrlVerification { ref challenge, .. } => {
+                Ok(HttpResponse::build(StatusCode::OK)
+                    .content_type("application/x-www-form-urlencoded")
+                    .body(challenge))
+            }
             slack::SlackEvent::EventCallback(event_callback) => {
                 state.sender.do_send(event_callback);
-                Ok(
-                    HttpResponse::build(StatusCode::OK)
-                        .content_type("text/html; charset=utf-8")
-                        .body(body)
-                )
-            },
+                Ok(HttpResponse::build(StatusCode::OK)
+                    .content_type("text/html; charset=utf-8")
+                    .body(body))
+            }
         }
     } else {
         // response
@@ -228,7 +204,7 @@ fn main() -> std::io::Result<()> {
                 })
                 .route("/", web::post().to(normal_handler))
                 .route("/", web::get().to(normal_handler))
-            });
+        });
 
         let use_ssl = match env::var("USE_SSL") {
             Ok(val) => val.parse().unwrap_or(false),
@@ -236,7 +212,6 @@ fn main() -> std::io::Result<()> {
         };
 
         if use_ssl {
-
             println!("Trying to bind ssl.");
 
             let mut ssl_builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
@@ -251,7 +226,6 @@ fn main() -> std::io::Result<()> {
 
             http_srv = http_srv.bind_openssl("0.0.0.0:14475", ssl_builder).unwrap();
         } else {
-
             println!("Trying to bind http.");
 
             http_srv = http_srv.bind("0.0.0.0:80").unwrap();
@@ -278,7 +252,8 @@ fn main() -> std::io::Result<()> {
         executor::block_on(srv.stop(true));
         main_sys.stop();
         println!("Stopped.");
-    }).expect("Fail to set Ctrl-C handler.");
+    })
+    .expect("Fail to set Ctrl-C handler.");
 
     system.run()
 }

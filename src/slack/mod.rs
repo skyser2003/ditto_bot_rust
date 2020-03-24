@@ -1,4 +1,4 @@
-use serde_derive::{Serialize, Deserialize};
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TextObject {
@@ -18,7 +18,7 @@ pub struct SectionBlock {
     pub block_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fields: Option<Vec<TextObject>>,
-    //pub accessory: 
+    //pub accessory:
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -124,13 +124,15 @@ pub enum SlackEvent {
     /// Content-type: application/x-www-form-urlencoded
     /// challenge=SOME_VALUE
     EventCallback(EventCallback),
-    UrlVerification { token: String, challenge: String },
+    UrlVerification {
+        token: String,
+        challenge: String,
+    },
 }
 
 /**
  * Sent from client.
  */
-
 
 #[derive(Clone, Debug, Serialize)]
 pub struct PostMessage {

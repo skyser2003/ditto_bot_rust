@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use actix::System;
+use actix::{fut::wrap_future, System};
 use actix_web::http::StatusCode;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
 
@@ -43,17 +43,17 @@ impl Message for MessageEvent {
 struct SlackEventActor {
     bot_token: String,
     bot_id: String,
-    slack_client: reqwest::blocking::Client,
+    slack_client: reqwest::Client,
 }
 
 impl Actor for SlackEventActor {
-    type Context = SyncContext<Self>;
+    type Context = Context<Self>;
 }
 
 impl Handler<MessageEvent> for SlackEventActor {
     type Result = Result<(), Error>;
 
-    fn handle(&mut self, msg: MessageEvent, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: MessageEvent, context: &mut Self::Context) -> Self::Result {
         if msg.user.contains(&self.bot_id) {
             return Ok(());
         }
@@ -81,8 +81,15 @@ impl Handler<MessageEvent> for SlackEventActor {
             .header("Authorization", "Bearer ".to_string() + &self.bot_token)
             .json(&reply);
 
-        let resp = request.send();
-        println!("Reponse from reply: {:?}", resp.unwrap().text().unwrap());
+        context.spawn(wrap_future(async {
+            // TODO: log error.
+            let resp = request.send().await;
+            println!(
+                "Reponse from reply: {:?}",
+                resp.unwrap().text().await.unwrap()
+            );
+        }));
+
         Ok(())
     }
 }
@@ -196,11 +203,12 @@ fn main() -> std::io::Result<()> {
 
     let system = System::new("slack");
 
-    let slack_event_actor = SyncArbiter::start(1, move || SlackEventActor {
+    let slack_event_actor = SlackEventActor {
         bot_token: bot_token.clone(),
         bot_id: "URS3HL8SD".to_string(), //TODO: remove hardcoded value
-        slack_client: reqwest::blocking::Client::new(),
-    });
+        slack_client: reqwest::Client::new(),
+    }
+    .start();
 
     let (tx, rx) = std::sync::mpsc::channel();
 

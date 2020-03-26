@@ -160,7 +160,15 @@ async fn normal_handler(
     println!("Success to verify a slack's signature.");
 
     if content_str.contains("json") {
-        let posted_event: slack::SlackEvent = serde_json::from_str(&body)?;
+        let posted_event: slack::SlackEvent = match serde_json::from_str(&body) {
+            Ok(v) => v,
+            Err(_) => {
+                println!("Failed to parse a slack json object.");
+                return Ok(HttpResponse::build(StatusCode::OK)
+                    .content_type("text/html; charset=utf-8")
+                    .body(body));
+            }
+        };
 
         match posted_event {
             slack::SlackEvent::UrlVerification { challenge, .. } => {

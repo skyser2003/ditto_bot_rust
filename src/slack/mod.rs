@@ -35,11 +35,15 @@ pub struct ButtonBlock<'a> {
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum BlockElement<'a> {
+    RichText {
+        block_id: &'a str,
+        elements: Vec<Box<BlockElement<'a>>>,
+    },
     RichTextSection {
         elements: Vec<Box<BlockElement<'a>>>,
     },
     Text {
-        text: &'a str,
+        text: String,
     },
     Button(ButtonBlock<'a>),
     Section(SectionBlock<'a>),
@@ -75,7 +79,7 @@ pub struct Icons<'a> {
 
 #[derive(Debug, Deserialize)]
 pub struct MessageCommon<'a> {
-    pub text: &'a str,
+    pub text: String,
     pub ts: &'a str,
 }
 

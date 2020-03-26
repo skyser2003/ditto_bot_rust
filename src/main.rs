@@ -162,8 +162,8 @@ async fn normal_handler(
     if content_str.contains("json") {
         let posted_event: slack::SlackEvent = match serde_json::from_str(&body) {
             Ok(v) => v,
-            Err(_) => {
-                println!("Failed to parse a slack json object.");
+            Err(e) => {
+                println!("Failed to parse a slack json object: {:?}", e);
                 return Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("text/html; charset=utf-8")
                     .body(body));

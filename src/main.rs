@@ -200,13 +200,13 @@ async fn normal_handler(
 fn main() -> std::io::Result<()> {
     let bot_token = match env::var("SLACK_BOT_TOKEN") {
         Ok(val) => val,
-        Err(_e) => panic!("Secret bot token is not given."),
+        Err(_e) => panic!("Bot token is not given."),
     };
     println!("{:?}", bot_token);
 
     let signing_secret = match env::var("SLACK_SIGNING_SECRET") {
         Ok(val) => val,
-        Err(_e) => panic!("Secret bot token is not given."),
+        Err(_e) => panic!("Signing secret is not given."),
     };
 
     let system = System::new("slack");

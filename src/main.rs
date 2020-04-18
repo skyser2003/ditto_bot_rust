@@ -58,6 +58,11 @@ impl Handler<MessageEvent> for SlackEventActor {
 
         let msg_text = format!("hello, {}", msg.user);
 
+        // For test - ditto_test channel only
+        if msg.channel != "CT70K7ZR7" {
+            return Ok(())
+        }
+
         let reply = slack::PostMessage {
             channel: &msg.channel,
             text: "hello, world",

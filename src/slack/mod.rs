@@ -84,6 +84,12 @@ pub struct MessageCommon<'a> {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct LinksEvent {
+    pub url: String,
+    pub domain: String
+}
+
+#[derive(Debug, Deserialize)]
 pub struct BasicMessage<'a> {
     #[serde(flatten)]
     pub common: MessageCommon<'a>,
@@ -107,11 +113,18 @@ pub struct ChannelJoinMessage<'a> {
     pub user: &'a str,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct LinkSharedMessage {
+    #[serde(flatten)]
+    pub links: [LinksEvent; 1]
+}
+
 #[derive(Debug)]
 // tag: subtype
 pub enum Message<'a> {
     BotMessage(BotMessage<'a>),
     ChannelJoin(ChannelJoinMessage<'a>),
+    LinkShared(LinkSharedMessage),
     BasicMessage(BasicMessage<'a>),
 }
 
@@ -194,6 +207,7 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
         deserialize_subtype! {
             "bot_message" => BotMessage<'de> as Message::BotMessage,
             "channel_join" => ChannelJoinMessage<'de> as Message::ChannelJoin,
+            "link_shared" => LinkSharedMessage as Message::LinkShared,
             "" => BasicMessage<'de> as Message::BasicMessage,
         }
     }
@@ -215,6 +229,11 @@ pub struct EventCallback<'a> {
     pub event_time: u64,
     pub team_id: &'a str,
     pub token: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LinkSharedCallback<'a> {
+    pub api_app_id: &'a str,
 }
 
 #[derive(Debug, Deserialize)]

@@ -6,4 +6,4 @@ WORKDIR /project
 RUN cargo update
 RUN cargo build --release
 
-CMD cargo run
+CMD cargo run --release

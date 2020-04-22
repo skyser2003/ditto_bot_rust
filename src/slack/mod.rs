@@ -102,8 +102,7 @@ pub struct BasicMessage<'a> {
 pub struct BotMessage<'a> {
     #[serde(flatten)]
     pub common: MessageCommon<'a>,
-    pub bot_id: &'a str,
-    pub icons: Icons<'a>,
+    pub bot_id: &'a str
 }
 
 #[derive(Debug, Deserialize)]

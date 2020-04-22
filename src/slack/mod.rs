@@ -234,6 +234,7 @@ pub struct EventCallback<'a> {
 #[derive(Debug, Deserialize)]
 pub struct LinkSharedCallback<'a> {
     pub api_app_id: &'a str,
+    pub event: InternalEvent<'a>
 }
 
 #[derive(Debug, Deserialize)]
@@ -259,6 +260,7 @@ pub enum SlackEvent<'a> {
         token: &'a str,
         challenge: &'a str,
     },
+    LinkSharedCallback(LinkSharedCallback<'a>)
 }
 
 /**

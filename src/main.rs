@@ -193,6 +193,13 @@ async fn normal_handler(
                     .content_type("text/html; charset=utf-8")
                     .body(body))
             }
+            slack::SlackEvent::LinkSharedCallback(link_shared_callback) => {
+                link_shared_callback.event;
+                
+                Ok(HttpResponse::build(StatusCode::OK)
+                    .content_type("text/html; charset=utf-8")
+                    .body(body))
+            }
         }
     } else {
         // response

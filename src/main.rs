@@ -120,7 +120,6 @@ async fn normal_handler(
     body: String,
     state: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    println!("REQ: {:?}", req);
     println!("Body: {:?}", body);
 
     let content_str = if let Some(i) = req.headers().get("content-type") {
@@ -148,7 +147,8 @@ async fn normal_handler(
             .checked_sub(std::time::Duration::from_secs(
                 slack_timestamp.parse::<u64>().unwrap(),
             ));
-        println!("now: {:?}", cur_timestamp);
+            
+        println!("now: {:?}", cur_timestamp.unwrap());
         //TODO: check replay attack
     }
 
@@ -193,9 +193,9 @@ async fn normal_handler(
                     .content_type("text/html; charset=utf-8")
                     .body(body))
             }
-            slack::SlackEvent::LinkSharedCallback(link_shared_callback) => {
-                link_shared_callback.event;
-                
+            slack::SlackEvent::LinkEvent(link_event) => {
+                println!("This is link");
+
                 Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("text/html; charset=utf-8")
                     .body(body))
@@ -267,7 +267,7 @@ fn main() -> std::io::Result<()> {
         } else {
             println!("Trying to bind http.");
 
-            http_srv = http_srv.bind("0.0.0.0:80").unwrap();
+            http_srv = http_srv.bind("0.0.0.0:8081").unwrap();
         }
 
         let srv = http_srv.run();

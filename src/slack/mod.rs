@@ -112,19 +112,22 @@ pub struct ChannelJoinMessage<'a> {
     pub user: &'a str,
 }
 
+
+/*
 #[derive(Debug, Deserialize)]
-pub struct LinkSharedMessage {
+pub struct LinkSharedMessage<'a> {
     #[serde(flatten)]
+    pub common: MessageCommon<'a>,
     pub links: [LinksEvent; 1]
 }
+*/
 
 #[derive(Debug)]
 // tag: subtype
 pub enum Message<'a> {
     BotMessage(BotMessage<'a>),
     ChannelJoin(ChannelJoinMessage<'a>),
-    LinkShared(LinkSharedMessage),
-    BasicMessage(BasicMessage<'a>),
+    BasicMessage(BasicMessage<'a>)
 }
 
 impl<'de> serde::Deserialize<'de> for Message<'de> {
@@ -154,6 +157,8 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
                 while let Some(kv) = map.next_entry::<&'de str, Content<'de>>()? {
                     match kv {
                         ("subtype", v) => {
+                            println!("Subtype: {}", v.as_str().unwrap());
+
                             if tag.is_some() {
                                 Err(serde::de::Error::duplicate_field("subtype"))?;
                             }
@@ -163,6 +168,7 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
                             });
                         }
                         (k, v) => {
+                            println!("Key: {}", k);
                             vec.push((Content::Str(k), v));
                         }
                     }
@@ -188,6 +194,7 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
                 return ::serde::export::Err(e);
             }
         };
+
         macro_rules! deserialize_subtype {
             ($($field:expr => $e_type:ty as $v_type:path,)*) => {
                 match tagged.tag.as_str() {
@@ -206,7 +213,6 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
         deserialize_subtype! {
             "bot_message" => BotMessage<'de> as Message::BotMessage,
             "channel_join" => ChannelJoinMessage<'de> as Message::ChannelJoin,
-            "link_shared" => LinkSharedMessage as Message::LinkShared,
             "" => BasicMessage<'de> as Message::BasicMessage,
         }
     }
@@ -259,7 +265,7 @@ pub enum SlackEvent<'a> {
         token: &'a str,
         challenge: &'a str,
     },
-    LinkSharedCallback(LinkSharedCallback<'a>)
+    LinkEvent(LinkSharedCallback<'a>)
 }
 
 /**

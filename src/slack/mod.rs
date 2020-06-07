@@ -111,16 +111,12 @@ pub struct ChannelJoinMessage<'a> {
     pub common: MessageCommon<'a>,
     pub user: &'a str,
 }
-
-
-/*
 #[derive(Debug, Deserialize)]
-pub struct LinkSharedMessage<'a> {
+pub struct LinkSharedInternalMessage<'a> {
     #[serde(flatten)]
     pub common: MessageCommon<'a>,
-    pub links: [LinksEvent; 1]
+    links: [LinksEvent; 1]
 }
-*/
 
 #[derive(Debug)]
 // tag: subtype
@@ -128,6 +124,21 @@ pub enum Message<'a> {
     BotMessage(BotMessage<'a>),
     ChannelJoin(ChannelJoinMessage<'a>),
     BasicMessage(BasicMessage<'a>)
+}
+
+#[derive(Debug)]
+pub enum LinkSharedMessage<'a> {
+    LinkShared(LinkSharedInternalMessage<'a>)
+}
+
+
+impl<'de> serde::Deserialize<'de> for LinkSharedMessage<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<LinkSharedMessage<'de>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // TODO: what
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for Message<'de> {
@@ -157,8 +168,6 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
                 while let Some(kv) = map.next_entry::<&'de str, Content<'de>>()? {
                     match kv {
                         ("subtype", v) => {
-                            println!("Subtype: {}", v.as_str().unwrap());
-
                             if tag.is_some() {
                                 Err(serde::de::Error::duplicate_field("subtype"))?;
                             }
@@ -223,6 +232,7 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
 #[serde(rename_all = "snake_case")]
 pub enum InternalEvent<'a> {
     Message(#[serde(borrow)] Message<'a>),
+    LinkShared(#[serde(borrow)] LinkSharedMessage<'a>)
 }
 
 #[derive(Debug, Deserialize)]

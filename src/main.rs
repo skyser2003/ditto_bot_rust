@@ -148,7 +148,7 @@ async fn normal_handler(
                 slack_timestamp.parse::<u64>().unwrap(),
             ));
             
-        println!("now: {:?}", cur_timestamp.unwrap());
+        // println!("now: {:?}", cur_timestamp.unwrap()); TODO: None exception
         //TODO: check replay attack
     }
 
@@ -187,6 +187,9 @@ async fn normal_handler(
                         if let Ok(message) = MessageEvent::from_slack_event(&message) {
                             state.sender.do_send(message)
                         }
+                    }
+                    slack::InternalEvent::LinkShared(link_shared) => {
+
                     }
                 };
                 Ok(HttpResponse::build(StatusCode::OK)

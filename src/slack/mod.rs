@@ -83,11 +83,6 @@ pub struct MessageCommon<'a> {
     pub ts: &'a str,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct LinksEvent {
-    pub url: String,
-    pub domain: String
-}
 
 #[derive(Debug, Deserialize)]
 pub struct BasicMessage<'a> {
@@ -111,11 +106,20 @@ pub struct ChannelJoinMessage<'a> {
     pub common: MessageCommon<'a>,
     pub user: &'a str,
 }
+
 #[derive(Debug, Deserialize)]
-pub struct LinkSharedInternalMessage<'a> {
-    #[serde(flatten)]
-    pub common: MessageCommon<'a>,
-    links: [LinksEvent; 1]
+pub struct LinksItem<'a> {
+    pub url: String, //Error("invalid type: string expected a borrowed string", line: 0, column: 0)
+    pub domain: &'a str,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LinkSharedMessage<'a> {
+    pub user: &'a str,
+    pub channel: &'a str,
+    pub message_ts: &'a str,
+    pub links: Vec<LinksItem<'a>>,
+    pub event_ts: &'a str,
 }
 
 #[derive(Debug)]
@@ -123,22 +127,7 @@ pub struct LinkSharedInternalMessage<'a> {
 pub enum Message<'a> {
     BotMessage(BotMessage<'a>),
     ChannelJoin(ChannelJoinMessage<'a>),
-    BasicMessage(BasicMessage<'a>)
-}
-
-#[derive(Debug)]
-pub enum LinkSharedMessage<'a> {
-    LinkShared(LinkSharedInternalMessage<'a>)
-}
-
-
-impl<'de> serde::Deserialize<'de> for LinkSharedMessage<'de> {
-    fn deserialize<D>(deserializer: D) -> Result<LinkSharedMessage<'de>, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // TODO: what
-    }
+    BasicMessage(BasicMessage<'a>),
 }
 
 impl<'de> serde::Deserialize<'de> for Message<'de> {
@@ -177,7 +166,6 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
                             });
                         }
                         (k, v) => {
-                            println!("Key: {}", k);
                             vec.push((Content::Str(k), v));
                         }
                     }
@@ -275,7 +263,6 @@ pub enum SlackEvent<'a> {
         token: &'a str,
         challenge: &'a str,
     },
-    LinkEvent(LinkSharedCallback<'a>)
 }
 
 /**

@@ -32,6 +32,12 @@ impl MessageEvent {
             _ => Err(anyhow!("Invalid event")),
         }
     }
+    fn from_slack_link_event(msg: &slack::LinkSharedMessage) -> Result<Self, Error> {
+        Ok(Self {
+            user: msg.user.to_string(),
+            channel: msg.channel.to_string(),
+        })
+    }
 }
 
 impl Message for MessageEvent {
@@ -52,16 +58,12 @@ impl Handler<MessageEvent> for SlackEventActor {
     type Result = Result<(), Error>;
 
     fn handle(&mut self, msg: MessageEvent, context: &mut Self::Context) -> Self::Result {
+        println!("Hey!");
         if msg.user.contains(&self.bot_id) {
             return Ok(());
         }
 
         let msg_text = format!("hello, {}", msg.user);
-
-        // For test - ditto_test channel only
-        if msg.channel != "CT70K7ZR7" {
-            return Ok(())
-        }
 
         let reply = slack::PostMessage {
             channel: &msg.channel,
@@ -175,6 +177,8 @@ async fn normal_handler(
             }
         };
 
+        println!("Pasred Event: {:?}", posted_event);
+
         match posted_event {
             slack::SlackEvent::UrlVerification { challenge, .. } => {
                 Ok(HttpResponse::build(StatusCode::OK)
@@ -187,18 +191,13 @@ async fn normal_handler(
                         if let Ok(message) = MessageEvent::from_slack_event(&message) {
                             state.sender.do_send(message)
                         }
-                    }
-                    slack::InternalEvent::LinkShared(link_shared) => {
-
-                    }
+                    },
+                    slack::InternalEvent::LinkShared(message) => {
+                        if let Ok(message) = MessageEvent::from_slack_link_event(&message) {
+                            state.sender.do_send(message)
+                        }
+                    },
                 };
-                Ok(HttpResponse::build(StatusCode::OK)
-                    .content_type("text/html; charset=utf-8")
-                    .body(body))
-            }
-            slack::SlackEvent::LinkEvent(link_event) => {
-                println!("This is link");
-
                 Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("text/html; charset=utf-8")
                     .body(body))

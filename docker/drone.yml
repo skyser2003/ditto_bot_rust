@@ -28,3 +28,21 @@ steps:
     - master
     event:
     - push
+
+---
+  kind: pipeline
+  type: docker
+  name: ditto_bot_rust_ci
+  
+  platform:
+    os: linux
+    arch: arm64
+  
+  steps:
+  - name: ci
+    image: rust
+    commands:
+      - rustup update
+      - rustup component add clippy
+      - cargo clippy
+  

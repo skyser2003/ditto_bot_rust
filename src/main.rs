@@ -68,19 +68,22 @@ impl Handler<MessageEvent> for SlackEventActor {
 
         let msg_text = format!("hello, {}", msg.user);
 
+        let mut blocks = Vec::<slack::BlockElement>::new();
+        blocks.push(slack::BlockElement::Section(slack::SectionBlock {
+            text: slack::TextObject {
+                ty: "plain_text",
+                text: &msg_text,
+                emoji: None,
+                verbatim: None,
+            },
+            block_id: None,
+            fields: None
+            }));
+
         let reply = slack::PostMessage {
             channel: &msg.channel,
             text: "hello, world",
-            blocks: Some(vec![slack::BlockElement::Section(slack::SectionBlock {
-                text: slack::TextObject {
-                    ty: "plain_text",
-                    text: &msg_text,
-                    emoji: None,
-                    verbatim: None,
-                },
-                block_id: None,
-                fields: None
-                })]),
+            blocks: Some(blocks),
         };
 
         println!("Reply: {:?}", serde_json::to_string(&reply)?);

@@ -79,9 +79,8 @@ impl Handler<MessageEvent> for SlackEventActor {
                     verbatim: None,
                 },
                 block_id: None,
-                fields: None,
-                url: msg.link.as_deref()
-            })]),
+                fields: None
+                })]),
         };
 
         println!("Reply: {:?}", serde_json::to_string(&reply)?);
@@ -202,6 +201,11 @@ async fn normal_handler(
                         }
                     },
                 };
+                Ok(HttpResponse::build(StatusCode::OK)
+                    .content_type("text/html; charset=utf-8")
+                    .body(body))
+            }
+            slack::SlackEvent::LinkSharedCallback(link_shared) => {
                 Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("text/html; charset=utf-8")
                     .body(body))

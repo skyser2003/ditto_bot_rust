@@ -17,9 +17,17 @@ pub struct SectionBlock<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fields: Option<Vec<TextObject<'a>>>,
-    pub url: Option<&'a str>
+    pub fields: Option<Vec<TextObject<'a>>>
     //pub accessory:
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ActionBlock<'a> {
+    pub text: TextObject<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elements: Option<Vec<BlockElement<'a>>>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -264,6 +272,7 @@ pub enum SlackEvent<'a> {
         token: &'a str,
         challenge: &'a str,
     },
+    LinkSharedCallback(LinkSharedCallback<'a>)
 }
 
 /**

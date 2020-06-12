@@ -4,6 +4,6 @@ COPY . /project
 WORKDIR /project
 
 RUN cargo update
-RUN cargo build --release
+RUN cargo build
 
-CMD cargo run --release
+CMD cargo run

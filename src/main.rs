@@ -280,6 +280,8 @@ fn main() -> std::io::Result<()> {
 
         let _ = tx.send(srv);
 
+        println!("Server run start!");
+
         system.run()
     });
 

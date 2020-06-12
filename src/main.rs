@@ -20,6 +20,7 @@ mod slack;
 struct MessageEvent {
     user: String,
     channel: String,
+    link: Option<String>
 }
 
 impl MessageEvent {
@@ -28,6 +29,7 @@ impl MessageEvent {
             slack::Message::BasicMessage(msg) => Ok(Self {
                 user: msg.user.to_string(),
                 channel: msg.channel.to_string(),
+                link: None
             }),
             _ => Err(anyhow!("Invalid event")),
         }
@@ -36,6 +38,7 @@ impl MessageEvent {
         Ok(Self {
             user: msg.user.to_string(),
             channel: msg.channel.to_string(),
+            link: Option::Some(msg.links[0].url.to_string())
         })
     }
 }
@@ -77,6 +80,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                 },
                 block_id: None,
                 fields: None,
+                url: msg.link.as_deref()
             })]),
         };
 

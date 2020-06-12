@@ -18,6 +18,7 @@ pub struct SectionBlock<'a> {
     pub block_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fields: Option<Vec<TextObject<'a>>>,
+    pub url: Option<&'a str>
     //pub accessory:
 }
 

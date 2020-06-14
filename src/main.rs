@@ -11,8 +11,11 @@ use ctrlc;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
-use futures::executor;
+use reqwest;
 
+use regex::Regex;
+use url::Url;
+use futures::executor;
 use std::env;
 
 mod slack;
@@ -53,40 +56,26 @@ struct SlackEventActor {
     slack_client: reqwest::Client,
 }
 
+trait SlackMessageSender
+    where Self: Actor
+{
+    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: Vec<slack::BlockElement>);
+}
+
 impl Actor for SlackEventActor {
     type Context = Context<Self>;
 }
 
-impl Handler<MessageEvent> for SlackEventActor {
-    type Result = Result<(), Error>;
-
-    fn handle(&mut self, msg: MessageEvent, context: &mut Self::Context) -> Self::Result {
-        println!("Hey!");
-        if msg.user.contains(&self.bot_id) {
-            return Ok(());
-        }
-
-        let msg_text = format!("hello, {}", msg.user);
-
-        let mut blocks = Vec::<slack::BlockElement>::new();
-        blocks.push(slack::BlockElement::Section(slack::SectionBlock {
-            text: slack::TextObject {
-                ty: "plain_text",
-                text: &msg_text,
-                emoji: None,
-                verbatim: None,
-            },
-            block_id: None,
-            fields: None
-            }));
+impl SlackMessageSender for SlackEventActor {
+    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: Vec<slack::BlockElement>) {
+        // println!("Blocks: {:?}", serde_json::to_string(&blocks).unwrap());
 
         let reply = slack::PostMessage {
-            channel: &msg.channel,
-            text: "hello, world",
-            blocks: Some(blocks),
+            channel: &channel,
+            text: None,
+            blocks: Some(&blocks),
         };
 
-        println!("Reply: {:?}", serde_json::to_string(&reply)?);
         let request = self
             .slack_client
             .post("https://slack.com/api/chat.postMessage")
@@ -102,6 +91,66 @@ impl Handler<MessageEvent> for SlackEventActor {
                 resp.unwrap().text().await.unwrap()
             );
         }));
+    }
+}
+
+impl Handler<MessageEvent> for SlackEventActor {
+    type Result = Result<(), Error>;
+
+    fn handle(&mut self, msg: MessageEvent, context: &mut Self::Context) -> Self::Result {
+        if msg.user.contains(&self.bot_id) {
+            return Ok(());
+        }
+
+        let mut blocks = Vec::<slack::BlockElement>::new();
+
+        let mut new_link = String::new();
+        let mut body = String::new();
+
+        match msg.link {
+            Some(link) => {
+                new_link = link;
+
+                let parsed_url = Url::parse(&new_link);
+
+                match parsed_url {
+                    Ok(parsed_url) => {
+                        if parsed_url.host_str().unwrap() == "namu.wiki" {
+                            /*
+                            // TODO: fix reqwest::blocking error
+
+                            let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
+
+                            body = reqwest::blocking::get(parsed_url.as_str()).unwrap().text().unwrap();
+                            let parsed_title = title_regex.captures(body.as_str()).unwrap();
+                            let title = parsed_title.get(1).unwrap();
+                            */
+
+                            blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
+                                block_id: None,
+                                elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
+                                    text: slack::TextObject {
+                                        ty: "plain_text",
+                                        // text: title.as_str(),
+                                        text: "나무위키 제목 파싱 전",
+                                        emoji: None,
+                                        verbatim: None
+                                    },
+                                    action_id: None,
+                                    url: Some(new_link.as_str()),
+                                    value: None,
+                                    style: Some("primary")
+                                })])
+                            }));
+                        }
+                    }
+                    Err(_) => {}
+                }
+            }
+            _ => {}
+        }
+
+        self.send(context, msg.channel, blocks);
 
         Ok(())
     }
@@ -156,7 +205,7 @@ async fn normal_handler(
                 slack_timestamp.parse::<u64>().unwrap(),
             ));
             
-        // println!("now: {:?}", cur_timestamp.unwrap()); TODO: None exception
+        println!("now: {:?}", cur_timestamp.unwrap());
         //TODO: check replay attack
     }
 
@@ -204,11 +253,6 @@ async fn normal_handler(
                         }
                     },
                 };
-                Ok(HttpResponse::build(StatusCode::OK)
-                    .content_type("text/html; charset=utf-8")
-                    .body(body))
-            }
-            slack::SlackEvent::LinkSharedCallback(link_shared) => {
                 Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("text/html; charset=utf-8")
                     .body(body))

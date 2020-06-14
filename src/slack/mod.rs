@@ -23,7 +23,6 @@ pub struct SectionBlock<'a> {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ActionBlock<'a> {
-    pub text: TextObject<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,11 +31,14 @@ pub struct ActionBlock<'a> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ButtonBlock<'a> {
-    #[serde(rename = "type")]
-    pub ty: &'a str,
-    pub action_id: &'a str,
+    pub text: TextObject<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<&'a str>, //primary or danger
 }
 
@@ -56,6 +58,7 @@ pub enum BlockElement<'a> {
     },
     Button(ButtonBlock<'a>),
     Section(SectionBlock<'a>),
+    Actions(ActionBlock<'a>)
 }
 
 #[derive(Debug, Deserialize)]
@@ -244,12 +247,6 @@ pub struct EventCallback<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LinkSharedCallback<'a> {
-    pub api_app_id: &'a str,
-    pub event: InternalEvent<'a>
-}
-
-#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum SlackEvent<'a> {
@@ -271,8 +268,7 @@ pub enum SlackEvent<'a> {
     UrlVerification {
         token: &'a str,
         challenge: &'a str,
-    },
-    LinkSharedCallback(LinkSharedCallback<'a>)
+    }
 }
 
 /**
@@ -282,8 +278,9 @@ pub enum SlackEvent<'a> {
 #[derive(Debug, Serialize)]
 pub struct PostMessage<'a> {
     pub channel: &'a str,
-    pub text: &'a str, // alternative text when blocks are not given (or cannot be displayed).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub blocks: Option<Vec<BlockElement<'a>>>,
+    pub text: Option<&'a str>, // alternative text when blocks are not given (or cannot be displayed).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocks: Option<&'a Vec<BlockElement<'a>>>,
     // pub as_user: Option<bool>,
 }

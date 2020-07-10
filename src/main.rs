@@ -115,33 +115,36 @@ impl Handler<MessageEvent> for SlackEventActor {
 
                 match parsed_url {
                     Ok(parsed_url) => {
-                        if parsed_url.host_str().unwrap() == "namu.wiki" {
-                            /*
-                            // TODO: fix reqwest::blocking error
+                        match parsed_url.host_str().unwrap() {
+                            "namu.wiki" => {
+                                /*
+                                // TODO: fix reqwest::blocking error
 
-                            let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
+                                let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
 
-                            body = reqwest::blocking::get(parsed_url.as_str()).unwrap().text().unwrap();
-                            let parsed_title = title_regex.captures(body.as_str()).unwrap();
-                            let title = parsed_title.get(1).unwrap();
-                            */
+                                body = reqwest::blocking::get(parsed_url.as_str()).unwrap().text().unwrap();
+                                let parsed_title = title_regex.captures(body.as_str()).unwrap();
+                                let title = parsed_title.get(1).unwrap();
+                                */
 
-                            blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
-                                block_id: None,
-                                elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
-                                    text: slack::TextObject {
-                                        ty: "plain_text",
-                                        // text: title.as_str(),
-                                        text: "나무위키 제목 파싱 전",
-                                        emoji: None,
-                                        verbatim: None
-                                    },
-                                    action_id: None,
-                                    url: Some(new_link.as_str()),
-                                    value: None,
-                                    style: Some("primary")
-                                })])
-                            }));
+                                blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
+                                    block_id: None,
+                                    elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
+                                        text: slack::TextObject {
+                                            ty: "plain_text",
+                                            // text: title.as_str(),
+                                            text: "나무위키 제목 파싱 전",
+                                            emoji: None,
+                                            verbatim: None
+                                        },
+                                        action_id: None,
+                                        url: Some(new_link.as_str()),
+                                        value: None,
+                                        style: Some("primary")
+                                    })])
+                                }));
+                            }
+                            _ => {}
                         }
                     }
                     Err(_) => {}

@@ -1,5 +1,5 @@
 [package]
-name = "rust-test"
+name = "ditto-bot-rust"
 version = "0.1.0"
 authors = ["장승호(Seung Ho Jang) <shjang1992@gmail.com>", "Seungmin Lee <elenesgu@gmail.com>"]
 edition = "2018"

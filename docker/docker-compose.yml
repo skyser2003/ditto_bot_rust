@@ -10,4 +10,4 @@ services:
       - SLACK_BOT_TOKEN=$SLACK_BOT_TOKEN
       - SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET
     ports:
-      - 2525:80
+      - 2525:8081

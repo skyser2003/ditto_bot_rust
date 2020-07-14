@@ -111,43 +111,41 @@ impl Handler<MessageEvent> for SlackEventActor {
             Some(link) => {
                 new_link = link;
 
-                let parsed_url = Url::parse(&new_link);
+                let parsed_url = Url::parse(&new_link).unwrap();
+                let url_string = parsed_url.host_str().unwrap();
 
-                match parsed_url {
-                    Ok(parsed_url) => {
-                        match parsed_url.host_str().unwrap() {
-                            "namu.wiki" => {
-                                /*
-                                // TODO: fix reqwest::blocking error
+                if url_string == "namu.wiki" {
+                    let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
 
-                                let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
+                    let fut = async {
+                        let res = reqwest::get(&new_link).await.unwrap();
+                        let body = res.text().await.unwrap();
 
-                                body = reqwest::blocking::get(parsed_url.as_str()).unwrap().text().unwrap();
-                                let parsed_title = title_regex.captures(body.as_str()).unwrap();
-                                let title = parsed_title.get(1).unwrap();
-                                */
+                        body
+                    };
 
-                                blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
-                                    block_id: None,
-                                    elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
-                                        text: slack::TextObject {
-                                            ty: "plain_text",
-                                            // text: title.as_str(),
-                                            text: "나무위키 제목 파싱 전",
-                                            emoji: None,
-                                            verbatim: None
-                                        },
-                                        action_id: None,
-                                        url: Some(new_link.as_str()),
-                                        value: None,
-                                        style: Some("primary")
-                                    })])
-                                }));
-                            }
-                            _ => {}
-                        }
-                    }
-                    Err(_) => {}
+                    body = executor::block_on(fut);
+
+                    let parsed_title = title_regex.captures(body.as_str()).unwrap();
+                    let title = parsed_title.get(1).unwrap();
+
+                    println!("{}", title.as_str());
+
+                    blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
+                        block_id: None,
+                        elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
+                            text: slack::TextObject {
+                                ty: "plain_text",
+                                text: title.as_str(),
+                                emoji: None,
+                                verbatim: None
+                            },
+                            action_id: None,
+                            url: Some(new_link.as_str()),
+                            value: None,
+                            style: Some("primary")
+                        })])
+                    }));
                 }
             }
             _ => {}

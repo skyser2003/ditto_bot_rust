@@ -188,41 +188,53 @@ async fn normal_handler(
         ""
     };
 
-    let slack_signature: &str = if let Some(sig) = req.headers().get("X-Slack-Signature") {
-        sig.to_str().unwrap()
-    } else {
-        return Ok(HttpResponse::Unauthorized().finish());
+    let is_test = match env::var("TEST") {
+        Ok(test_val) => {
+            match test_val.as_ref() {
+                "1" => true,
+                _ => false
+            }
+        }
+        Err(_) => false
     };
 
-    let slack_timestamp: &str = if let Some(sig) = req.headers().get("X-Slack-Request-Timestamp") {
-        sig.to_str().unwrap()
-    } else {
-        return Ok(HttpResponse::Unauthorized().finish());
-    };
-
-    {
-        let cur_timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .checked_sub(std::time::Duration::from_secs(
-                slack_timestamp.parse::<u64>().unwrap(),
-            ));
-            
-        println!("now: {:?}", cur_timestamp.unwrap());
-        //TODO: check replay attack
+    if is_test == false {
+        let slack_signature: &str = if let Some(sig) = req.headers().get("X-Slack-Signature") {
+            sig.to_str().unwrap()
+        } else {
+            return Ok(HttpResponse::Unauthorized().finish());
+        };
+    
+        let slack_timestamp: &str = if let Some(sig) = req.headers().get("X-Slack-Request-Timestamp") {
+            sig.to_str().unwrap()
+        } else {
+            return Ok(HttpResponse::Unauthorized().finish());
+        };
+    
+        {
+            let cur_timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .checked_sub(std::time::Duration::from_secs(
+                    slack_timestamp.parse::<u64>().unwrap(),
+                ));
+                
+            println!("now: {:?}", cur_timestamp.unwrap());
+            //TODO: check replay attack
+        }
+    
+        let signature_base_string: String = format!("v0:{}:{}", slack_timestamp, body);
+    
+        let mut mac = Hmac::<Sha256>::new_varkey(state.signing_secret.as_bytes()).expect("");
+        mac.input(signature_base_string.as_bytes());
+    
+        let calculated_signature = format!("v0={:02x}", ByteBuf(&mac.result().code().as_slice()));
+    
+        if slack_signature != calculated_signature {
+            return Ok(HttpResponse::Unauthorized().finish());
+        }
+        println!("Success to verify a slack's signature.");
     }
-
-    let signature_base_string: String = format!("v0:{}:{}", slack_timestamp, body);
-
-    let mut mac = Hmac::<Sha256>::new_varkey(state.signing_secret.as_bytes()).expect("");
-    mac.input(signature_base_string.as_bytes());
-
-    let calculated_signature = format!("v0={:02x}", ByteBuf(&mac.result().code().as_slice()));
-
-    if slack_signature != calculated_signature {
-        return Ok(HttpResponse::Unauthorized().finish());
-    }
-    println!("Success to verify a slack's signature.");
 
     if content_str.contains("json") {
         let posted_event: slack::SlackEvent = match serde_json::from_str(&body) {

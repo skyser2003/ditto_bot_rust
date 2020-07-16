@@ -66,27 +66,33 @@ impl Actor for SlackEventActor {
     type Context = Context<Self>;
 }
 
-impl SlackMessageSender for SlackEventActor {
-    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: Vec<slack::BlockElement>) {
-        // println!("Blocks: {:?}", serde_json::to_string(&blocks).unwrap());
+fn generate_request(channel: String, blocks: Vec<slack::BlockElement<'_>>, slack_client: &reqwest::Client, bot_token: String) -> reqwest::RequestBuilder {
+    let reply = slack::PostMessage {
+        channel: &channel,
+        text: None,
+        blocks: Some(&blocks),
+    };
 
-        let reply = slack::PostMessage {
-            channel: &channel,
-            text: None,
-            blocks: Some(&blocks),
-        };
+    let request = slack_client
+        .post("https://slack.com/api/chat.postMessage")
+        .header("Content-type", "application/json; charset=utf-8")
+        .header("Authorization", "Bearer ".to_string() + &bot_token)
+        .json(&reply);
 
-        let request = self
-            .slack_client
-            .post("https://slack.com/api/chat.postMessage")
-            .header("Content-type", "application/json; charset=utf-8")
-            .header("Authorization", "Bearer ".to_string() + &self.bot_token)
-            .json(&reply);
+    request
+}
 
-        context.spawn(wrap_future(async {
-            // TODO: log error.
-            let resp = request.send().await;
+async fn send_request(request: reqwest::RequestBuilder) {
+    let resp = request.send().await;
     println!("Response from reply: {:?}", resp.unwrap().text().await.unwrap());
+}
+
+
+impl SlackMessageSender for SlackEventActor {
+    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: Vec<slack::BlockElement<'_>>) {
+        let request = generate_request(channel, blocks, &self.slack_client, self.bot_token.clone());
+
+        context.spawn(wrap_future(send_request(request)));
     }
 }
 
@@ -98,56 +104,59 @@ impl Handler<MessageEvent> for SlackEventActor {
             return Ok(());
         }
 
-        let mut blocks = Vec::<slack::BlockElement>::new();
+        let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
+        let bot_token = self.bot_token.clone();
 
-        let mut new_link = String::new();
-        let mut body = String::new();
+        context.spawn(wrap_future(async move {
+            let mut blocks = Vec::<slack::BlockElement>::new();
+            let mut body = String::new();
+            let mut new_link = String::new();
 
-        match msg.link {
-            Some(link) => {
-                new_link = link;
+            match msg.link {
+                Some(link) => {
+                    new_link = link;
 
-                let parsed_url = Url::parse(&new_link).unwrap();
-                let url_string = parsed_url.host_str().unwrap();
+                    let parsed_url = Url::parse(&new_link).unwrap();
+                    let url_string = parsed_url.host_str().unwrap();
 
-                if url_string == "namu.wiki" {
-                    let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
-
-                    let fut = async {
+                    if url_string == "namu.wiki" {
                         let res = reqwest::get(&new_link).await.unwrap();
-                        let body = res.text().await.unwrap();
+                        body = res.text().await.unwrap();
 
-                        body
-                    };
+                        let title = match title_regex.captures(body.as_str()) {
+                            Some(captures) => match captures.get(1) {
+                                Some(match_title) => match_title.as_str(),
+                                None => "Invalid url"
+                            }
+                            None => "Invalid url"
+                        };
+                        
+                        println!("{}", title);
 
-                    body = executor::block_on(fut);
-
-                    let parsed_title = title_regex.captures(body.as_str()).unwrap();
-                    let title = parsed_title.get(1).unwrap();
-
-                    println!("{}", title.as_str());
-
-                    blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
-                        block_id: None,
-                        elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
-                            text: slack::TextObject {
-                                ty: "plain_text",
-                                text: title.as_str(),
-                                emoji: None,
-                                verbatim: None
-                            },
-                            action_id: None,
-                            url: Some(new_link.as_str()),
-                            value: None,
-                            style: Some("primary")
-                        })])
-                    }));
+                        blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
+                            block_id: None,
+                            elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
+                                text: slack::TextObject {
+                                    ty: "plain_text",
+                                    text: title,
+                                    emoji: None,
+                                    verbatim: None
+                                },
+                                action_id: None,
+                                url: Some(new_link.as_str()),
+                                value: None,
+                                style: Some("primary")
+                            })])
+                        }));
+                    }
                 }
+                _ => {}
             }
-            _ => {}
-        }
 
-        self.send(context, msg.channel, blocks);
+            let slack_client = reqwest::Client::new();
+            let request = generate_request(msg.channel, blocks, &slack_client, bot_token);
+            send_request(request).await;
+        }));
 
         Ok(())
     }
@@ -333,7 +342,7 @@ fn main() -> std::io::Result<()> {
         } else {
             println!("Trying to bind http.");
 
-            http_srv = http_srv.bind("0.0.0.0:8081").unwrap();
+            http_srv = http_srv.bind("0.0.0.0:8082").unwrap();
         }
 
         let srv = http_srv.run();

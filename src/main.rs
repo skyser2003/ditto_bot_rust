@@ -86,11 +86,7 @@ impl SlackMessageSender for SlackEventActor {
         context.spawn(wrap_future(async {
             // TODO: log error.
             let resp = request.send().await;
-            println!(
-                "Reponse from reply: {:?}",
-                resp.unwrap().text().await.unwrap()
-            );
-        }));
+    println!("Response from reply: {:?}", resp.unwrap().text().await.unwrap());
     }
 }
 
@@ -245,7 +241,7 @@ async fn normal_handler(
             }
         };
 
-        println!("Pasred Event: {:?}", posted_event);
+        println!("Parsed Event: {:?}", posted_event);
 
         match posted_event {
             slack::SlackEvent::UrlVerification { challenge, .. } => {

@@ -109,7 +109,8 @@ impl Handler<MessageEvent> for SlackEventActor {
 
         context.spawn(wrap_future(async move {
             let mut blocks = Vec::<slack::BlockElement>::new();
-            let mut body = String::new();
+
+            let body;
 
             match &msg.link {
                 Some(link) => {
@@ -120,7 +121,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                         let res = reqwest::get(link).await.unwrap();
                         body = res.text().await.unwrap();
 
-                        let title = match title_regex.captures(body.as_str()) {
+                        let title = match title_regex.captures(&body) {
                             Some(captures) => match captures.get(1) {
                                 Some(match_title) => match_title.as_str(),
                                 None => "Invalid url"

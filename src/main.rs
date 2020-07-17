@@ -110,17 +110,14 @@ impl Handler<MessageEvent> for SlackEventActor {
         context.spawn(wrap_future(async move {
             let mut blocks = Vec::<slack::BlockElement>::new();
             let mut body = String::new();
-            let mut new_link = String::new();
 
-            match msg.link {
+            match &msg.link {
                 Some(link) => {
-                    new_link = link;
-
-                    let parsed_url = Url::parse(&new_link).unwrap();
+                    let parsed_url = Url::parse(link).unwrap();
                     let url_string = parsed_url.host_str().unwrap();
 
                     if url_string == "namu.wiki" {
-                        let res = reqwest::get(&new_link).await.unwrap();
+                        let res = reqwest::get(link).await.unwrap();
                         body = res.text().await.unwrap();
 
                         let title = match title_regex.captures(body.as_str()) {
@@ -143,7 +140,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                                     verbatim: None
                                 },
                                 action_id: None,
-                                url: Some(new_link.as_str()),
+                                url: Some(link),
                                 value: None,
                                 style: Some("primary")
                             })])

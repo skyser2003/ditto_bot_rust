@@ -128,7 +128,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                             None => "Invalid url"
                         };
                         
-                        println!("{}", title);
+                        println!("Title: {}", title);
 
                         blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
                             block_id: None,

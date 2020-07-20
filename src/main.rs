@@ -11,6 +11,7 @@ use reqwest;
 use rustls::internal::pemfile::{certs, rsa_private_keys};
 use rustls::{NoClientAuth, ServerConfig};
 use sha2::Sha256;
+use std::borrow::Cow;
 use std::env;
 use std::io::BufReader;
 use std::fs::File;
@@ -134,7 +135,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                             elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
                                 text: slack::TextObject {
                                     ty: "plain_text",
-                                    text: title,
+                                    text: Cow::from(title),
                                     emoji: None,
                                     verbatim: None
                                 },

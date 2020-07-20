@@ -57,18 +57,18 @@ struct SlackEventActor {
 trait SlackMessageSender
     where Self: Actor
 {
-    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: Vec<slack::BlockElement>);
+    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: &Vec<slack::BlockElement>);
 }
 
 impl Actor for SlackEventActor {
     type Context = Context<Self>;
 }
 
-fn generate_request(channel: String, blocks: Vec<slack::BlockElement<'_>>, slack_client: &reqwest::Client, bot_token: String) -> reqwest::RequestBuilder {
+fn generate_request(channel: String, blocks: &Vec<slack::BlockElement<'_>>, slack_client: &reqwest::Client, bot_token: String) -> reqwest::RequestBuilder {
     let reply = slack::PostMessage {
         channel: &channel,
         text: None,
-        blocks: Some(&blocks),
+        blocks: Some(blocks),
     };
 
     let request = slack_client
@@ -87,8 +87,8 @@ async fn send_request(request: reqwest::RequestBuilder) {
 
 
 impl SlackMessageSender for SlackEventActor {
-    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: Vec<slack::BlockElement<'_>>) {
-        let request = generate_request(channel, blocks, &self.slack_client, self.bot_token.clone());
+    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: &Vec<slack::BlockElement<'_>>) {
+        let request = generate_request(channel, &blocks, &self.slack_client, self.bot_token.clone());
 
         context.spawn(wrap_future(send_request(request)));
     }
@@ -150,7 +150,7 @@ impl Handler<MessageEvent> for SlackEventActor {
             }
 
             let slack_client = reqwest::Client::new();
-            let request = generate_request(msg.channel, blocks, &slack_client, bot_token);
+            let request = generate_request(msg.channel, &blocks, &slack_client, bot_token);
             send_request(request).await;
         }));
 

@@ -58,6 +58,7 @@ struct SlackEventActor {
 trait SlackMessageSender
     where Self: Actor
 {
+    fn base_request_builder(&self) -> reqwest::RequestBuilder;
     fn send(&mut self, context: &mut Self::Context, channel: String, blocks: &Vec<slack::BlockElement>);
 }
 
@@ -65,33 +66,35 @@ impl Actor for SlackEventActor {
     type Context = Context<Self>;
 }
 
-fn generate_request(channel: String, blocks: &Vec<slack::BlockElement<'_>>, slack_client: &reqwest::Client, bot_token: String) -> reqwest::RequestBuilder {
+fn generate_request(request_builder: reqwest::RequestBuilder, channel: String, blocks: &Vec<slack::BlockElement<'_>>) -> reqwest::RequestBuilder {
     let reply = slack::PostMessage {
         channel: &channel,
         text: None,
         blocks: Some(blocks),
     };
 
-    let request = slack_client
-        .post("https://slack.com/api/chat.postMessage")
-        .header("Content-type", "application/json; charset=utf-8")
-        .header("Authorization", "Bearer ".to_string() + &bot_token)
-        .json(&reply);
-
-    request
+    request_builder.json(&reply)
 }
 
-async fn send_request(request: reqwest::RequestBuilder) {
-    let resp = request.send().await;
+async fn send_request(request_builder: reqwest::RequestBuilder) {
+    let resp = request_builder.send().await;
     println!("Response from reply: {:?}", resp.unwrap().text().await.unwrap());
 }
 
 
 impl SlackMessageSender for SlackEventActor {
-    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: &Vec<slack::BlockElement<'_>>) {
-        let request = generate_request(channel, &blocks, &self.slack_client, self.bot_token.clone());
+    fn base_request_builder(&self) -> reqwest::RequestBuilder {
+        self.slack_client
+            .post("https://slack.com/api/chat.postMessage")
+            .header("Content-type", "application/json; charset=utf-8")
+            .header("Authorization", "Bearer ".to_string() + &self.bot_token)
+    }
 
-        context.spawn(wrap_future(send_request(request)));
+    fn send(&mut self, context: &mut Self::Context, channel: String, blocks: &Vec<slack::BlockElement<'_>>) {
+        let base_request_builder = self.base_request_builder();
+        let request_builder = generate_request(base_request_builder, channel, &blocks);
+
+        context.spawn(wrap_future(send_request(request_builder)));
     }
 }
 
@@ -104,7 +107,8 @@ impl Handler<MessageEvent> for SlackEventActor {
         }
 
         let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
-        let bot_token = self.bot_token.clone();
+
+        let base_request_builder = self.base_request_builder();
 
         context.spawn(wrap_future(async move {
             let mut blocks = Vec::<slack::BlockElement>::new();
@@ -150,8 +154,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                 _ => {}
             }
 
-            let slack_client = reqwest::Client::new();
-            let request = generate_request(msg.channel, &blocks, &slack_client, bot_token);
+            let request = generate_request(base_request_builder, msg.channel, &blocks);
             send_request(request).await;
         }));
 

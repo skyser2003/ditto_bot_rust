@@ -1,10 +1,12 @@
+use std::borrow::Cow;
+
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TextObject<'a> {
     #[serde(rename = "type")]
     pub ty: &'a str, //plain_text or mkdwn
-    pub text: &'a str,
+    pub text: Cow<'a, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emoji: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

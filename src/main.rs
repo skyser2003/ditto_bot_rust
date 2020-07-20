@@ -2,21 +2,19 @@ use actix::prelude::*;
 use actix::{fut::wrap_future, System};
 use actix_web::http::StatusCode;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
-
 use anyhow::{anyhow, Error};
-
-use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
-
 use ctrlc;
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
-
-use reqwest;
-
-use regex::Regex;
-use url::Url;
 use futures::executor;
+use hmac::{Hmac, Mac};
+use regex::Regex;
+use reqwest;
+use rustls::internal::pemfile::{certs, rsa_private_keys};
+use rustls::{NoClientAuth, ServerConfig};
+use sha2::Sha256;
 use std::env;
+use std::io::BufReader;
+use std::fs::File;
+use url::Url;
 
 mod slack;
 
@@ -128,7 +126,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                             }
                             None => "Invalid url"
                         };
-                        
+
                         println!("Title: {}", title);
 
                         blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
@@ -205,13 +203,13 @@ async fn normal_handler(
         } else {
             return Ok(HttpResponse::Unauthorized().finish());
         };
-    
+
         let slack_timestamp: &str = if let Some(sig) = req.headers().get("X-Slack-Request-Timestamp") {
             sig.to_str().unwrap()
         } else {
             return Ok(HttpResponse::Unauthorized().finish());
         };
-    
+
         {
             let cur_timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -219,18 +217,18 @@ async fn normal_handler(
                 .checked_sub(std::time::Duration::from_secs(
                     slack_timestamp.parse::<u64>().unwrap(),
                 ));
-                
+
             println!("now: {:?}", cur_timestamp.unwrap());
             //TODO: check replay attack
         }
-    
+
         let signature_base_string: String = format!("v0:{}:{}", slack_timestamp, body);
-    
+
         let mut mac = Hmac::<Sha256>::new_varkey(state.signing_secret.as_bytes()).expect("");
         mac.input(signature_base_string.as_bytes());
-    
+
         let calculated_signature = format!("v0={:02x}", ByteBuf(&mac.result().code().as_slice()));
-    
+
         if slack_signature != calculated_signature {
             return Ok(HttpResponse::Unauthorized().finish());
         }
@@ -325,18 +323,18 @@ fn main() -> std::io::Result<()> {
 
         if use_ssl {
             println!("Trying to bind ssl.");
+            let mut config = ServerConfig::new(NoClientAuth::new());
+            let cert_file = &mut BufReader::new(File::open("PUBLIC_KEY.pem").unwrap());
+            let key_file = &mut BufReader::new(File::open("PRIVATE_KEY.pem").unwrap());
+            let cert_chain = certs(cert_file).unwrap();
+            let mut keys = rsa_private_keys(key_file).unwrap();
 
-            let mut ssl_builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+            if keys.len() == 0 {
+                panic!("Fails to load a private key file. Check it is formatted in RSA.")
+            }
+            config.set_single_cert(cert_chain, keys.remove(0)).unwrap();
 
-            ssl_builder
-                .set_private_key_file("PRIVATE_KEY.pem", SslFiletype::PEM)
-                .unwrap();
-
-            ssl_builder
-                .set_certificate_chain_file("PUBLIC_KEY.pem")
-                .unwrap();
-
-            http_srv = http_srv.bind_openssl("0.0.0.0:14475", ssl_builder).unwrap();
+            http_srv = http_srv.bind_rustls("0.0.0.0:14475", config).unwrap();
         } else {
             println!("Trying to bind http.");
 

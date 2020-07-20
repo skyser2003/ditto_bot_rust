@@ -60,20 +60,12 @@ trait SlackMessageSender
 {
     fn base_request_builder(&self) -> reqwest::RequestBuilder;
     fn send(&mut self, context: &mut Self::Context, channel: String, blocks: &Vec<slack::BlockElement>);
+
+    fn generate_request(request_builder: reqwest::RequestBuilder, channel: String, blocks: &Vec<slack::BlockElement<'_>>) -> reqwest::RequestBuilder;
 }
 
 impl Actor for SlackEventActor {
     type Context = Context<Self>;
-}
-
-fn generate_request(request_builder: reqwest::RequestBuilder, channel: String, blocks: &Vec<slack::BlockElement<'_>>) -> reqwest::RequestBuilder {
-    let reply = slack::PostMessage {
-        channel: &channel,
-        text: None,
-        blocks: Some(blocks),
-    };
-
-    request_builder.json(&reply)
 }
 
 async fn send_request(request_builder: reqwest::RequestBuilder) {
@@ -92,9 +84,19 @@ impl SlackMessageSender for SlackEventActor {
 
     fn send(&mut self, context: &mut Self::Context, channel: String, blocks: &Vec<slack::BlockElement<'_>>) {
         let base_request_builder = self.base_request_builder();
-        let request_builder = generate_request(base_request_builder, channel, &blocks);
+        let request_builder = Self::generate_request(base_request_builder, channel, &blocks);
 
         context.spawn(wrap_future(send_request(request_builder)));
+    }
+
+    fn generate_request(request_builder: reqwest::RequestBuilder, channel: String, blocks: &Vec<slack::BlockElement<'_>>) -> reqwest::RequestBuilder {
+        let reply = slack::PostMessage {
+            channel: &channel,
+            text: None,
+            blocks: Some(blocks),
+        };
+    
+        request_builder.json(&reply)
     }
 }
 
@@ -154,7 +156,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                 _ => {}
             }
 
-            let request = generate_request(base_request_builder, msg.channel, &blocks);
+            let request = Self::generate_request(base_request_builder, msg.channel, &blocks);
             send_request(request).await;
         }));
 

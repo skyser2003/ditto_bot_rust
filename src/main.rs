@@ -13,8 +13,8 @@ use rustls::{NoClientAuth, ServerConfig};
 use sha2::Sha256;
 use std::borrow::Cow;
 use std::env;
-use std::io::BufReader;
 use std::fs::File;
+use std::io::BufReader;
 use url::Url;
 
 mod slack;
@@ -22,7 +22,7 @@ mod slack;
 struct MessageEvent {
     user: String,
     channel: String,
-    link: Option<String>
+    link: Option<String>,
 }
 
 impl MessageEvent {
@@ -31,7 +31,7 @@ impl MessageEvent {
             slack::Message::BasicMessage(msg) => Ok(Self {
                 user: msg.user.to_string(),
                 channel: msg.channel.to_string(),
-                link: None
+                link: None,
             }),
             _ => Err(anyhow!("Invalid event")),
         }
@@ -40,7 +40,7 @@ impl MessageEvent {
         Ok(Self {
             user: msg.user.to_string(),
             channel: msg.channel.to_string(),
-            link: Option::Some(msg.links[0].url.to_string())
+            link: Option::Some(msg.links[0].url.to_string()),
         })
     }
 }
@@ -56,12 +56,22 @@ struct SlackEventActor {
 }
 
 trait SlackMessageSender
-    where Self: Actor
+where
+    Self: Actor,
 {
     fn base_request_builder(&self) -> reqwest::RequestBuilder;
-    fn send(&mut self, context: &mut Self::Context, channel: &str, blocks: &Vec<slack::BlockElement>);
+    fn send(
+        &mut self,
+        context: &mut Self::Context,
+        channel: &str,
+        blocks: &Vec<slack::BlockElement>,
+    );
 
-    fn generate_request(request_builder: reqwest::RequestBuilder, channel: &str, blocks: &Vec<slack::BlockElement<'_>>) -> reqwest::RequestBuilder;
+    fn generate_request(
+        request_builder: reqwest::RequestBuilder,
+        channel: &str,
+        blocks: &Vec<slack::BlockElement<'_>>,
+    ) -> reqwest::RequestBuilder;
 }
 
 impl Actor for SlackEventActor {
@@ -70,9 +80,11 @@ impl Actor for SlackEventActor {
 
 async fn send_request(request_builder: reqwest::RequestBuilder) {
     let resp = request_builder.send().await;
-    println!("Response from reply: {:?}", resp.unwrap().text().await.unwrap());
+    println!(
+        "Response from reply: {:?}",
+        resp.unwrap().text().await.unwrap()
+    );
 }
-
 
 impl SlackMessageSender for SlackEventActor {
     fn base_request_builder(&self) -> reqwest::RequestBuilder {
@@ -82,20 +94,29 @@ impl SlackMessageSender for SlackEventActor {
             .header("Authorization", "Bearer ".to_string() + &self.bot_token)
     }
 
-    fn send(&mut self, context: &mut Self::Context, channel: &str, blocks: &Vec<slack::BlockElement<'_>>) {
+    fn send(
+        &mut self,
+        context: &mut Self::Context,
+        channel: &str,
+        blocks: &Vec<slack::BlockElement<'_>>,
+    ) {
         let base_request_builder = self.base_request_builder();
         let request_builder = Self::generate_request(base_request_builder, channel, &blocks);
 
         context.spawn(wrap_future(send_request(request_builder)));
     }
 
-    fn generate_request(request_builder: reqwest::RequestBuilder, channel: &str, blocks: &Vec<slack::BlockElement<'_>>) -> reqwest::RequestBuilder {
+    fn generate_request(
+        request_builder: reqwest::RequestBuilder,
+        channel: &str,
+        blocks: &Vec<slack::BlockElement<'_>>,
+    ) -> reqwest::RequestBuilder {
         let reply = slack::PostMessage {
             channel: channel,
             text: None,
             blocks: Some(blocks),
         };
-    
+
         request_builder.json(&reply)
     }
 }
@@ -124,16 +145,15 @@ impl Handler<MessageEvent> for SlackEventActor {
                         let res = reqwest::get(link).await.unwrap();
                         let body = res.text().await.unwrap();
 
-                        let title_opt = title_regex
-                            .captures(&body)
-                            .and_then(|captures|
-                                captures
+                        let title_opt = title_regex.captures(&body).and_then(|captures| {
+                            captures
                                 .get(1)
-                                .and_then(|match_title| Some(match_title.as_str())));
+                                .and_then(|match_title| Some(match_title.as_str()))
+                        });
 
                         let title = match title_opt {
                             Some(val) => format!("{} - 나무위키", val),
-                            None => "Invalid url".to_string()
+                            None => "Invalid url".to_string(),
                         };
 
                         blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
@@ -143,13 +163,13 @@ impl Handler<MessageEvent> for SlackEventActor {
                                     ty: "plain_text",
                                     text: Cow::from(title),
                                     emoji: None,
-                                    verbatim: None
+                                    verbatim: None,
                                 },
                                 action_id: None,
                                 url: Some(link),
                                 value: None,
-                                style: Some("primary")
-                            })])
+                                style: Some("primary"),
+                            })]),
                         }));
                     }
                 }
@@ -194,13 +214,11 @@ async fn normal_handler(
     };
 
     let is_test = match env::var("TEST") {
-        Ok(test_val) => {
-            match test_val.as_ref() {
-                "1" => true,
-                _ => false
-            }
-        }
-        Err(_) => false
+        Ok(test_val) => match test_val.as_ref() {
+            "1" => true,
+            _ => false,
+        },
+        Err(_) => false,
     };
 
     if is_test == false {
@@ -210,11 +228,12 @@ async fn normal_handler(
             return Ok(HttpResponse::Unauthorized().finish());
         };
 
-        let slack_timestamp: &str = if let Some(sig) = req.headers().get("X-Slack-Request-Timestamp") {
-            sig.to_str().unwrap()
-        } else {
-            return Ok(HttpResponse::Unauthorized().finish());
-        };
+        let slack_timestamp: &str =
+            if let Some(sig) = req.headers().get("X-Slack-Request-Timestamp") {
+                sig.to_str().unwrap()
+            } else {
+                return Ok(HttpResponse::Unauthorized().finish());
+            };
 
         {
             let cur_timestamp = std::time::SystemTime::now()
@@ -266,12 +285,12 @@ async fn normal_handler(
                         if let Ok(message) = MessageEvent::from_slack_event(&message) {
                             state.sender.do_send(message)
                         }
-                    },
+                    }
                     slack::InternalEvent::LinkShared(message) => {
                         if let Ok(message) = MessageEvent::from_slack_link_event(&message) {
                             state.sender.do_send(message)
                         }
-                    },
+                    }
                 };
                 Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("text/html; charset=utf-8")

@@ -19,8 +19,7 @@ pub struct SectionBlock<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fields: Option<Vec<TextObject<'a>>>
-    //pub accessory:
+    pub fields: Option<Vec<TextObject<'a>>>, //pub accessory:
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -28,7 +27,7 @@ pub struct ActionBlock<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub elements: Option<Vec<BlockElement<'a>>>
+    pub elements: Option<Vec<BlockElement<'a>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,7 +59,7 @@ pub enum BlockElement<'a> {
     },
     Button(ButtonBlock<'a>),
     Section(SectionBlock<'a>),
-    Actions(ActionBlock<'a>)
+    Actions(ActionBlock<'a>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -97,7 +96,6 @@ pub struct MessageCommon<'a> {
     pub ts: &'a str,
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct BasicMessage<'a> {
     #[serde(flatten)]
@@ -111,7 +109,7 @@ pub struct BasicMessage<'a> {
 pub struct BotMessage<'a> {
     #[serde(flatten)]
     pub common: MessageCommon<'a>,
-    pub bot_id: &'a str
+    pub bot_id: &'a str,
 }
 
 #[derive(Debug, Deserialize)]
@@ -234,7 +232,7 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
 #[serde(rename_all = "snake_case")]
 pub enum InternalEvent<'a> {
     Message(#[serde(borrow)] Message<'a>),
-    LinkShared(#[serde(borrow)] LinkSharedMessage<'a>)
+    LinkShared(#[serde(borrow)] LinkSharedMessage<'a>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,7 +268,7 @@ pub enum SlackEvent<'a> {
     UrlVerification {
         token: &'a str,
         challenge: &'a str,
-    }
+    },
 }
 
 /**

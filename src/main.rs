@@ -23,6 +23,7 @@ mod slack;
 struct MessageEvent {
     user: String,
     channel: String,
+    text: String,
     link: Option<String>,
 }
 
@@ -32,6 +33,7 @@ impl MessageEvent {
             slack::Message::BasicMessage(msg) => Ok(Self {
                 user: msg.user.to_string(),
                 channel: msg.channel.to_string(),
+                text: msg.common.text.to_string(),
                 link: None,
             }),
             _ => Err(anyhow!("Invalid event")),
@@ -41,6 +43,7 @@ impl MessageEvent {
         Ok(Self {
             user: msg.user.to_string(),
             channel: msg.channel.to_string(),
+            text: msg.common.text.to_string(),
             link: Option::Some(msg.links[0].url.to_string()),
         })
     }
@@ -124,6 +127,39 @@ impl SlackMessageSender for SlackEventActor {
 
 lazy_static! {
     static ref TITLE_REGEX: Regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap();
+    static ref MHW_DATA: Vec<slack::MonsterHunterData<'static>> = vec![
+        slack::MonsterHunterData {
+            keywords: vec!["ㄷㄷ", "ㄷㄷ가마루", "도도가마루"],
+            text: "도도가마루",
+            image_url: "https://github.com/shipduck/ditto_bot/blob/master/images/Dodogama.png"
+        },
+        slack::MonsterHunterData {
+            keywords: vec!["ㅊㅊ", "추천"],
+            text: "치치야크",
+            image_url: "https://github.com/shipduck/ditto_bot/blob/master/images/Tzitzi_Ya_Ku.png"
+        },
+        slack::MonsterHunterData {
+            keywords: vec!["ㅈㄹ", "지랄"],
+            text: "조라마그다라오스",
+            image_url:
+                "https://github.com/shipduck/ditto_bot/blob/master/images/Zorah_Magdaros.png"
+        },
+        slack::MonsterHunterData {
+            keywords: vec!["ㄹㅇ", "리얼"],
+            text: "로아루드로스",
+            image_url: "https://github.com/shipduck/ditto_bot/blob/master/images/Royal_Ludroth.png"
+        },
+        slack::MonsterHunterData {
+            keywords: vec!["ㅇㄷ"],
+            text: "오도가론",
+            image_url: "https://github.com/shipduck/ditto_bot/blob/master/images/Odogaron.png"
+        },
+        slack::MonsterHunterData {
+            keywords: vec!["이불", "졸려", "잘래", "잠와", "이블조"],
+            text: "이블조",
+            image_url: "https://github.com/shipduck/ditto_bot/blob/master/images/Evil_Jaw.png"
+        },
+    ];
 }
 
 impl Handler<MessageEvent> for SlackEventActor {
@@ -139,6 +175,25 @@ impl Handler<MessageEvent> for SlackEventActor {
         context.spawn(wrap_future(async move {
             let mut blocks = Vec::<slack::BlockElement>::new();
 
+            // Mhw images
+            for data in MHW_DATA.iter() {
+                for keyword in data.keywords.iter() {
+                    if msg.text.contains(keyword) {
+                        blocks.push(slack::BlockElement::Section(slack::SectionBlock {
+                            text: slack::TextObject {
+                                ty: "plain_text",
+                                text: Cow::from(data.image_url),
+                                emoji: None,
+                                verbatim: None,
+                            },
+                            block_id: None,
+                            fields: None,
+                        }));
+                    }
+                }
+            }
+
+            // Namuwiki
             match &msg.link {
                 Some(link) => {
                     let parsed_url = Url::parse(link).unwrap();

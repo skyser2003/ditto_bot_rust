@@ -127,6 +127,7 @@ pub struct LinksItem<'a> {
 
 #[derive(Debug, Deserialize)]
 pub struct LinkSharedMessage<'a> {
+    pub common: MessageCommon<'a>,
     pub user: &'a str,
     pub channel: &'a str,
     pub message_ts: &'a str,
@@ -283,4 +284,10 @@ pub struct PostMessage<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocks: Option<&'a Vec<BlockElement<'a>>>,
     // pub as_user: Option<bool>,
+}
+
+pub struct MonsterHunterData<'a> {
+    pub keywords: Vec<&'a str>,
+    pub text: &'a str,
+    pub image_url: &'a str,
 }

@@ -6,6 +6,7 @@ use anyhow::{anyhow, Error};
 use ctrlc;
 use futures::executor;
 use hmac::{Hmac, Mac};
+use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest;
 use rustls::internal::pemfile::{certs, rsa_private_keys};
@@ -121,6 +122,10 @@ impl SlackMessageSender for SlackEventActor {
     }
 }
 
+lazy_static! {
+    static ref TITLE_REGEX: Regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap();
+}
+
 impl Handler<MessageEvent> for SlackEventActor {
     type Result = Result<(), Error>;
 
@@ -128,8 +133,6 @@ impl Handler<MessageEvent> for SlackEventActor {
         if msg.user.contains(&self.bot_id) {
             return Ok(());
         }
-
-        let title_regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap(); // TODO: take it somewhere else
 
         let base_request_builder = self.base_request_builder();
 
@@ -148,7 +151,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                     let res = reqwest::get(link).await.unwrap();
                     let body = res.text().await.unwrap();
 
-                    let title_opt = title_regex.captures(&body).and_then(|captures| {
+                    let title_opt = TITLE_REGEX.captures(&body).and_then(|captures| {
                         captures
                             .get(1)
                             .and_then(|match_title| Some(match_title.as_str()))

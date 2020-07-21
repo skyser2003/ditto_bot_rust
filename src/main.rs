@@ -179,15 +179,12 @@ impl Handler<MessageEvent> for SlackEventActor {
             for data in MHW_DATA.iter() {
                 for keyword in data.keywords.iter() {
                     if msg.text.contains(keyword) {
-                        blocks.push(slack::BlockElement::Section(slack::SectionBlock {
-                            text: slack::TextObject {
-                                ty: "mrkdwn",
-                                text: Cow::from(data.image_url),
-                                emoji: None,
-                                verbatim: None,
-                            },
+                        blocks.push(slack::BlockElement::Image(slack::ImageBlock {
+                            ty: "image",
+                            image_url: data.image_url,
+                            alt_text: data.text,
+                            title: None,
                             block_id: None,
-                            fields: None,
                         }));
                     }
                 }

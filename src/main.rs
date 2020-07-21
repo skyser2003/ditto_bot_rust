@@ -181,7 +181,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                     if msg.text.contains(keyword) {
                         blocks.push(slack::BlockElement::Section(slack::SectionBlock {
                             text: slack::TextObject {
-                                ty: "plain_text",
+                                ty: "mrkdwn",
                                 text: Cow::from(data.image_url),
                                 emoji: None,
                                 verbatim: None,

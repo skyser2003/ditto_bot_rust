@@ -50,7 +50,7 @@ pub struct ImageBlock<'a> {
     pub image_url: &'a str,
     pub alt_text: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<&'a str>,
+    pub title: Option<TextObject<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_id: Option<&'a str>,
 }

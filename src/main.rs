@@ -7,6 +7,7 @@ use ctrlc;
 use futures::executor;
 use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
+use rand::prelude::*;
 use regex::Regex;
 use reqwest;
 use rustls::internal::pemfile::{certs, rsa_private_keys};
@@ -57,6 +58,7 @@ struct SlackEventActor {
     bot_token: String,
     bot_id: String,
     slack_client: reqwest::Client,
+    rng: rand::rngs::ThreadRng,
 }
 
 trait SlackMessageSender
@@ -160,7 +162,6 @@ lazy_static! {
             image_url: "https://github.com/shipduck/ditto_bot/blob/master/images/Evil_Jaw.png"
         },
     ];
-
     static ref IS_TEST: bool = match env::var("TEST") {
         Ok(test_val) => match test_val.as_ref() {
             "1" => true,
@@ -179,6 +180,7 @@ impl Handler<MessageEvent> for SlackEventActor {
         }
 
         let base_request_builder = self.base_request_builder();
+        let mut rng = self.rng;
 
         context.spawn(wrap_future(async move {
             let mut blocks = Vec::<slack::BlockElement>::new();
@@ -187,13 +189,17 @@ impl Handler<MessageEvent> for SlackEventActor {
             for data in MHW_DATA.iter() {
                 for keyword in data.keywords.iter() {
                     if msg.text.contains(keyword) {
-                        blocks.push(slack::BlockElement::Image(slack::ImageBlock {
-                            ty: "image",
-                            image_url: data.image_url,
-                            alt_text: data.text,
-                            title: None,
-                            block_id: None,
-                        }));
+                        let rand_val = rng.gen_range(0, 100); // Percentage
+
+                        if rand_val < 35 {
+                            blocks.push(slack::BlockElement::Image(slack::ImageBlock {
+                                ty: "image",
+                                image_url: data.image_url,
+                                alt_text: data.text,
+                                title: None,
+                                block_id: None,
+                            }));
+                        }
                     }
                 }
             }
@@ -380,6 +386,7 @@ fn main() -> std::io::Result<()> {
         bot_token: bot_token.clone(),
         bot_id: "URS3HL8SD".to_string(), //TODO: remove hardcoded value
         slack_client: reqwest::Client::new(),
+        rng: rand::thread_rng(),
     }
     .start();
 

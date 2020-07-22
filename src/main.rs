@@ -160,6 +160,14 @@ lazy_static! {
             image_url: "https://github.com/shipduck/ditto_bot/blob/master/images/Evil_Jaw.png"
         },
     ];
+
+    static ref IS_TEST: bool = match env::var("TEST") {
+        Ok(test_val) => match test_val.as_ref() {
+            "1" => true,
+            _ => false,
+        },
+        Err(_) => false,
+    };
 }
 
 impl Handler<MessageEvent> for SlackEventActor {
@@ -270,15 +278,7 @@ async fn normal_handler(
         ""
     };
 
-    let is_test = match env::var("TEST") {
-        Ok(test_val) => match test_val.as_ref() {
-            "1" => true,
-            _ => false,
-        },
-        Err(_) => false,
-    };
-
-    if is_test == false {
+    if *IS_TEST == false {
         let slack_signature: &str = if let Some(sig) = req.headers().get("X-Slack-Signature") {
             sig.to_str().unwrap()
         } else {

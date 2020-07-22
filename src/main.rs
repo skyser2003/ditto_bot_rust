@@ -133,12 +133,14 @@ lazy_static! {
         slack::MonsterHunterData {
             keywords: vec!["ㄷㄷ", "ㄷㄷ가마루", "도도가마루"],
             text: "도도가마루",
-            image_url: "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Dodogama.png"
+            image_url:
+                "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Dodogama.png"
         },
         slack::MonsterHunterData {
             keywords: vec!["ㅊㅊ", "추천"],
             text: "치치야크",
-            image_url: "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Tzitzi_Ya_Ku.png"
+            image_url:
+                "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Tzitzi_Ya_Ku.png"
         },
         slack::MonsterHunterData {
             keywords: vec!["ㅈㄹ", "지랄"],
@@ -149,17 +151,20 @@ lazy_static! {
         slack::MonsterHunterData {
             keywords: vec!["ㄹㅇ", "리얼"],
             text: "로아루드로스",
-            image_url: "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Royal_Ludroth.png"
+            image_url:
+                "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Royal_Ludroth.png"
         },
         slack::MonsterHunterData {
             keywords: vec!["ㅇㄷ"],
             text: "오도가론",
-            image_url: "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Odogaron.png"
+            image_url:
+                "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Odogaron.png"
         },
         slack::MonsterHunterData {
             keywords: vec!["이불", "졸려", "잘래", "잠와", "이블조"],
             text: "이블조",
-            image_url: "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Evil_Jaw.png"
+            image_url:
+                "https://github.com/skyser2003/ditto_bot_rust/blob/master/images/Evil_Jaw.png"
         },
     ];
     static ref IS_TEST: bool = match env::var("TEST") {

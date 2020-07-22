@@ -198,6 +198,7 @@ impl Handler<MessageEvent> for SlackEventActor {
 
                     if text.contains(keyword) {
                         let rand_val = rng.gen_range(0, 100); // Percentage
+                        println!("Rand val: {}", rand_val);
 
                         if rand_val < 35 {
                             blocks.push(slack::BlockElement::Image(slack::ImageBlock {

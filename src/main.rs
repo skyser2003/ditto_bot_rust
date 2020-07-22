@@ -17,6 +17,7 @@ use std::borrow::Cow;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
+use unescape::unescape;
 use url::Url;
 
 mod slack;
@@ -193,7 +194,9 @@ impl Handler<MessageEvent> for SlackEventActor {
             // Mhw images
             for data in MHW_DATA.iter() {
                 for keyword in data.keywords.iter() {
-                    if msg.text.contains(keyword) {
+                    let text = unescape(&msg.text).unwrap();
+
+                    if text.contains(keyword) {
                         let rand_val = rng.gen_range(0, 100); // Percentage
 
                         if rand_val < 35 {

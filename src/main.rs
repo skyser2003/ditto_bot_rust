@@ -398,8 +398,7 @@ fn main() -> std::io::Result<()> {
     let slack_event_actor = SlackEventActor {
         bot_token: bot_token.clone(),
         bot_id: "URS3HL8SD".to_string(), //TODO: remove hardcoded value
-        slack_client: reqwest::Client::new(),
-        rng: rand::thread_rng(),
+        slack_client: reqwest::Client::new()
     }
     .start();
 

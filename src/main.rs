@@ -199,17 +199,13 @@ impl Handler<MessageEvent> for SlackEventActor {
                         let text = unescape(&msg.text).unwrap();
 
                         if text.contains(keyword) {
-                            let rand_val = thread_rng().gen_range(0, 100); // Percentage
-
-                            if rand_val < 35 {
-                                blocks.push(slack::BlockElement::Image(slack::ImageBlock {
-                                    ty: "image",
-                                    image_url: data.image_url,
-                                    alt_text: data.text,
-                                    title: None,
-                                    block_id: None,
-                                }));
-                            }
+                            blocks.push(slack::BlockElement::Image(slack::ImageBlock {
+                                ty: "image",
+                                image_url: data.image_url,
+                                alt_text: data.text,
+                                title: None,
+                                block_id: None,
+                            }));
                         }
                     }
                 }

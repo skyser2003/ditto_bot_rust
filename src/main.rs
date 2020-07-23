@@ -59,7 +59,6 @@ struct SlackEventActor {
     bot_token: String,
     bot_id: String,
     slack_client: reqwest::Client,
-    rng: rand::rngs::ThreadRng,
 }
 
 trait SlackMessageSender
@@ -186,33 +185,39 @@ impl Handler<MessageEvent> for SlackEventActor {
         }
 
         let base_request_builder = self.base_request_builder();
-        let mut rng = self.rng;
 
         context.spawn(wrap_future(async move {
             let mut blocks = Vec::<slack::BlockElement>::new();
 
-            // Mhw images
-            for data in MHW_DATA.iter() {
-                for keyword in data.keywords.iter() {
-                    let text = unescape(&msg.text).unwrap();
+            ////////////////////////////////////////////////////////////////////////////////////////
+            //                                       Mhw images                                   //
+            ////////////////////////////////////////////////////////////////////////////////////////
+            // TODO: Remove hard coded value
+            if thread_rng().gen_range(0, 100) < 35 {
+                for data in MHW_DATA.iter() {
+                    for keyword in data.keywords.iter() {
+                        let text = unescape(&msg.text).unwrap();
 
-                    if text.contains(keyword) {
-                        let rand_val = rng.gen_range(0, 100); // Percentage
+                        if text.contains(keyword) {
+                            let rand_val = thread_rng().gen_range(0, 100); // Percentage
 
-                        if rand_val < 35 {
-                            blocks.push(slack::BlockElement::Image(slack::ImageBlock {
-                                ty: "image",
-                                image_url: data.image_url,
-                                alt_text: data.text,
-                                title: None,
-                                block_id: None,
-                            }));
+                            if rand_val < 35 {
+                                blocks.push(slack::BlockElement::Image(slack::ImageBlock {
+                                    ty: "image",
+                                    image_url: data.image_url,
+                                    alt_text: data.text,
+                                    title: None,
+                                    block_id: None,
+                                }));
+                            }
                         }
                     }
                 }
             }
 
-            // Namuwiki
+            ////////////////////////////////////////////////////////////////////////////////////////
+            //                                    Namuwiki Link                                   //
+            ////////////////////////////////////////////////////////////////////////////////////////
             match &msg.link {
                 Some(link) => {
                     let parsed_url = Url::parse(link).unwrap();

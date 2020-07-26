@@ -59,6 +59,7 @@ struct SlackEventActor {
     bot_token: String,
     bot_id: String,
     slack_client: reqwest::Client,
+    redis_client: Option<redis::Client>,
 }
 
 trait SlackMessageSender
@@ -173,6 +174,10 @@ lazy_static! {
             _ => false,
         },
         Err(_) => false,
+    };
+    static ref REDIS_ADDRESS: String = match env::var("REDIS_ADDRESS") {
+        Ok(val) => val,
+        Err(_) => "".to_string(),
     };
 }
 
@@ -395,6 +400,7 @@ fn main() -> std::io::Result<()> {
         bot_token: bot_token.clone(),
         bot_id: "URS3HL8SD".to_string(), //TODO: remove hardcoded value
         slack_client: reqwest::Client::new(),
+        redis_client: None,
     }
     .start();
 

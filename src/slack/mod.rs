@@ -140,7 +140,6 @@ pub struct LinksItem<'a> {
 
 #[derive(Debug, Deserialize)]
 pub struct LinkSharedMessage<'a> {
-    pub common: MessageCommon<'a>,
     pub user: &'a str,
     pub channel: &'a str,
     pub message_ts: &'a str,

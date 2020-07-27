@@ -45,7 +45,7 @@ impl MessageEvent {
         Ok(Self {
             user: msg.user.to_string(),
             channel: msg.channel.to_string(),
-            text: msg.common.text.to_string(),
+            text: "".to_string(),
             link: Option::Some(msg.links[0].url.to_string()),
         })
     }

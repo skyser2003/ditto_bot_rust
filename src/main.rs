@@ -7,6 +7,7 @@ use ctrlc;
 use futures::executor;
 use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
+use log::debug;
 use rand::prelude::*;
 use regex::Regex;
 use reqwest;
@@ -87,7 +88,7 @@ impl Actor for SlackEventActor {
 
 async fn send_request(request_builder: reqwest::RequestBuilder) {
     let resp = request_builder.send().await;
-    println!(
+    debug!(
         "Response from reply: {:?}",
         resp.unwrap().text().await.unwrap()
     );
@@ -290,7 +291,7 @@ async fn normal_handler(
     body: String,
     state: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    println!("Body: {:?}", body);
+    debug!("Body: {:?}", body);
 
     let content_str = if let Some(i) = req.headers().get("content-type") {
         i.to_str().unwrap()
@@ -320,7 +321,7 @@ async fn normal_handler(
                     slack_timestamp.parse::<u64>().unwrap(),
                 ));
 
-            println!("now: {:?}", cur_timestamp.unwrap());
+            debug!("now: {:?}", cur_timestamp.unwrap());
             //TODO: check replay attack
         }
 
@@ -334,21 +335,21 @@ async fn normal_handler(
         if slack_signature != calculated_signature {
             return Ok(HttpResponse::Unauthorized().finish());
         }
-        println!("Success to verify a slack's signature.");
+        debug!("Success to verify a slack's signature.");
     }
 
     if content_str.contains("json") {
         let posted_event: slack::SlackEvent = match serde_json::from_str(&body) {
             Ok(v) => v,
             Err(e) => {
-                println!("Failed to parse a slack json object: {:?}", e);
+                eprintln!("Failed to parse a slack json object: {:?}", e);
                 return Ok(HttpResponse::build(StatusCode::OK)
                     .content_type("text/html; charset=utf-8")
                     .body(body));
             }
         };
 
-        println!("Parsed Event: {:?}", posted_event);
+        debug!("Parsed Event: {:?}", posted_event);
 
         match posted_event {
             slack::SlackEvent::UrlVerification { challenge, .. } => {
@@ -387,7 +388,7 @@ fn main() -> std::io::Result<()> {
         Ok(val) => val,
         Err(_e) => panic!("Bot token is not given."),
     };
-    println!("{:?}", bot_token);
+    println!("Bot token: {:?}", bot_token);
 
     let signing_secret = match env::var("SLACK_SIGNING_SECRET") {
         Ok(val) => val,

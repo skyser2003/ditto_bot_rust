@@ -7,7 +7,7 @@ use ctrlc;
 use futures::executor;
 use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
-use log::debug;
+use log::{debug, info};
 use rand::prelude::*;
 use regex::Regex;
 use reqwest;
@@ -374,7 +374,7 @@ fn main() -> std::io::Result<()> {
         Ok(val) => val,
         Err(_e) => panic!("Bot token is not given."),
     };
-    println!("Bot token: {:?}", bot_token);
+    info!("Bot token: {:?}", bot_token);
 
     let signing_secret = match env::var("SLACK_SIGNING_SECRET") {
         Ok(val) => val,
@@ -412,7 +412,7 @@ fn main() -> std::io::Result<()> {
         };
 
         if use_ssl {
-            println!("Trying to bind ssl.");
+            info!("Trying to bind ssl.");
             let mut config = ServerConfig::new(NoClientAuth::new());
             let cert_file = &mut BufReader::new(File::open("PUBLIC_KEY.pem").unwrap());
             let key_file = &mut BufReader::new(File::open("PRIVATE_KEY.pem").unwrap());
@@ -426,7 +426,7 @@ fn main() -> std::io::Result<()> {
 
             http_srv = http_srv.bind_rustls("0.0.0.0:14475", config).unwrap();
         } else {
-            println!("Trying to bind http.");
+            info!("Trying to bind http.");
 
             http_srv = http_srv.bind("0.0.0.0:8082").unwrap();
         }
@@ -435,7 +435,7 @@ fn main() -> std::io::Result<()> {
 
         let _ = tx.send(srv);
 
-        println!("Server run start!");
+        info!("Server run start!");
 
         system.run()
     });
@@ -446,14 +446,14 @@ fn main() -> std::io::Result<()> {
 
     ctrlc::set_handler(move || {
         if ctrl_c_pressed.load(std::sync::atomic::Ordering::SeqCst) {
-            println!("Force to stop program.");
+            info!("Force to stop program.");
             std::process::exit(1);
         }
         ctrl_c_pressed.store(true, std::sync::atomic::Ordering::SeqCst);
-        println!("Try to stop HttpServer.");
+        info!("Try to stop HttpServer.");
         executor::block_on(srv.stop(true));
         main_sys.stop();
-        println!("Stopped.");
+        info!("Stopped.");
     })
     .expect("Fail to set Ctrl-C handler.");
 

@@ -99,7 +99,7 @@ impl SlackMessageSender for SlackEventActor {
         self.slack_client
             .post("https://slack.com/api/chat.postMessage")
             .header("Content-type", "application/json; charset=utf-8")
-            .header("Authorization", "Bearer ".to_string() + &self.bot_token)
+            .header("Authorization", format!("Bearer {}", &self.bot_token))
     }
 
     fn send(
@@ -120,7 +120,7 @@ impl SlackMessageSender for SlackEventActor {
         blocks: &Vec<slack::BlockElement<'_>>,
     ) -> reqwest::RequestBuilder {
         let reply = slack::PostMessage {
-            channel: channel,
+            channel,
             text: None,
             blocks: Some(blocks),
         };
@@ -169,17 +169,8 @@ lazy_static! {
                 "https://raw.githubusercontent.com/skyser2003/ditto_bot_rust/master/images/Evil_Jaw.png"
         },
     ];
-    static ref IS_TEST: bool = match env::var("TEST") {
-        Ok(test_val) => match test_val.as_ref() {
-            "1" => true,
-            _ => false,
-        },
-        Err(_) => false,
-    };
-    static ref REDIS_ADDRESS: String = match env::var("REDIS_ADDRESS") {
-        Ok(val) => val,
-        Err(_) => "".to_string(),
-    };
+    static ref IS_TEST: bool = env::var("TEST").and_then(|test_val| Ok(test_val == "1")).unwrap_or(false);
+    static ref REDIS_ADDRESS: String = env::var("REDIS_ADDRESS").unwrap_or("".to_string());
 }
 
 impl Handler<MessageEvent> for SlackEventActor {
@@ -200,10 +191,10 @@ impl Handler<MessageEvent> for SlackEventActor {
             ////////////////////////////////////////////////////////////////////////////////////////
             // TODO: Remove hard coded value
             if thread_rng().gen_range(0, 100) < 35 {
-                for data in MHW_DATA.iter() {
-                    for keyword in data.keywords.iter() {
-                        let text = unescape(&msg.text).unwrap();
+                let text = unescape(&msg.text).unwrap();
 
+                for data in &*MHW_DATA {
+                    for keyword in &data.keywords {
                         if text.contains(keyword) {
                             blocks.push(slack::BlockElement::Image(slack::ImageBlock {
                                 ty: "image",
@@ -220,15 +211,15 @@ impl Handler<MessageEvent> for SlackEventActor {
             ////////////////////////////////////////////////////////////////////////////////////////
             //                                    Namuwiki Link                                   //
             ////////////////////////////////////////////////////////////////////////////////////////
-            match &msg.link {
-                Some(link) => {
-                    let parsed_url = Url::parse(link).unwrap();
-                    let url_string = parsed_url.host_str().unwrap();
+            if let Some(link) = &msg.link {
+                let parsed_url = Url::parse(link).unwrap();
+                let url_string = parsed_url.host_str().unwrap();
 
-                    if url_string != "namu.wiki" {
-                        return;
-                    }
+                if url_string != "namu.wiki" {
+                    return;
+                }
 
+                let title = {
                     let res = reqwest::get(link).await.unwrap();
                     let body = res.text().await.unwrap();
 
@@ -238,28 +229,27 @@ impl Handler<MessageEvent> for SlackEventActor {
                             .and_then(|match_title| Some(match_title.as_str()))
                     });
 
-                    let title = match title_opt {
+                    match title_opt {
                         Some(val) => format!("{} - 나무위키", val),
                         None => "Invalid url".to_string(),
-                    };
+                    }
+                };
 
-                    blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
-                        block_id: None,
-                        elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
-                            text: slack::TextObject {
-                                ty: "plain_text",
-                                text: Cow::from(title),
-                                emoji: None,
-                                verbatim: None,
-                            },
-                            action_id: None,
-                            url: Some(link),
-                            value: None,
-                            style: Some("primary"),
-                        })]),
-                    }));
-                }
-                _ => {}
+                blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
+                    block_id: None,
+                    elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
+                        text: slack::TextObject {
+                            ty: "plain_text",
+                            text: Cow::from(title),
+                            emoji: None,
+                            verbatim: None,
+                        },
+                        action_id: None,
+                        url: Some(link),
+                        value: None,
+                        style: Some("primary"),
+                    })]),
+                }));
             }
 
             let request = Self::generate_request(base_request_builder, &msg.channel, &blocks);
@@ -300,18 +290,18 @@ async fn normal_handler(
     };
 
     if *IS_TEST == false {
-        let slack_signature: &str = if let Some(sig) = req.headers().get("X-Slack-Signature") {
-            sig.to_str().unwrap()
+        let (slack_signature, slack_timestamp) = if let (Some(sig), Some(ts)) = (
+            req.headers()
+                .get("X-Slack-Signature")
+                .and_then(|s| s.to_str().ok()),
+            req.headers()
+                .get("X-Slack-Request-Timestamp")
+                .and_then(|s| s.to_str().ok()),
+        ) {
+            (sig, ts)
         } else {
             return Ok(HttpResponse::Unauthorized().finish());
         };
-
-        let slack_timestamp: &str =
-            if let Some(sig) = req.headers().get("X-Slack-Request-Timestamp") {
-                sig.to_str().unwrap()
-            } else {
-                return Ok(HttpResponse::Unauthorized().finish());
-            };
 
         {
             let cur_timestamp = std::time::SystemTime::now()
@@ -338,48 +328,44 @@ async fn normal_handler(
         debug!("Success to verify a slack's signature.");
     }
 
-    if content_str.contains("json") {
-        let posted_event: slack::SlackEvent = match serde_json::from_str(&body) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("Failed to parse a slack json object: {:?}", e);
-                return Ok(HttpResponse::build(StatusCode::OK)
-                    .content_type("text/html; charset=utf-8")
-                    .body(body));
-            }
-        };
-
-        debug!("Parsed Event: {:?}", posted_event);
-
-        match posted_event {
-            slack::SlackEvent::UrlVerification { challenge, .. } => {
-                Ok(HttpResponse::build(StatusCode::OK)
-                    .content_type("application/x-www-form-urlencoded")
-                    .body(challenge.to_string()))
-            }
-            slack::SlackEvent::EventCallback(event_callback) => {
-                match event_callback.event {
-                    slack::InternalEvent::Message(message) => {
-                        if let Ok(message) = MessageEvent::from_slack_event(&message) {
-                            state.sender.do_send(message)
-                        }
-                    }
-                    slack::InternalEvent::LinkShared(message) => {
-                        if let Ok(message) = MessageEvent::from_slack_link_event(&message) {
-                            state.sender.do_send(message)
-                        }
-                    }
-                };
-                Ok(HttpResponse::build(StatusCode::OK)
-                    .content_type("text/html; charset=utf-8")
-                    .body(body))
-            }
-        }
-    } else {
-        // response
-        Ok(HttpResponse::build(StatusCode::BAD_REQUEST)
+    if !content_str.contains("json") {
+        return Ok(HttpResponse::build(StatusCode::BAD_REQUEST)
             .content_type("text/html; charset=utf-8")
-            .body(body))
+            .body(body));
+    }
+
+    let posted_event: slack::SlackEvent = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Failed to parse a slack json object: {:?}", e);
+            return Ok(HttpResponse::build(StatusCode::OK)
+                .content_type("text/html; charset=utf-8")
+                .body(body));
+        }
+    };
+
+    debug!("Parsed Event: {:?}", posted_event);
+
+    match posted_event {
+        slack::SlackEvent::UrlVerification { challenge, .. } => {
+            Ok(HttpResponse::build(StatusCode::OK)
+                .content_type("application/x-www-form-urlencoded")
+                .body(challenge.to_string()))
+        }
+        slack::SlackEvent::EventCallback(event_callback) => {
+            if let Ok(message) = match event_callback.event {
+                slack::InternalEvent::Message(message) => MessageEvent::from_slack_event(&message),
+                slack::InternalEvent::LinkShared(message) => {
+                    MessageEvent::from_slack_link_event(&message)
+                }
+            } {
+                state.sender.do_send(message);
+            }
+
+            Ok(HttpResponse::build(StatusCode::OK)
+                .content_type("text/html; charset=utf-8")
+                .body(body))
+        }
     }
 }
 

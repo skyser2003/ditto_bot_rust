@@ -34,6 +34,27 @@ pub fn test_deserialize_unicode_basic_message() {
 }
 
 #[test]
+pub fn test_serde_enum() {
+    assert_eq!(
+        serde_json::from_str::<TextObjectType>("\"plain_text\"").unwrap(),
+        TextObjectType::PlainText
+    );
+    assert_eq!(
+        serde_json::from_str::<TextObjectType>("\"mkdwn\"").unwrap(),
+        TextObjectType::Markdown
+    );
+
+    assert_eq!(
+        serde_json::to_string(&TextObjectType::PlainText).unwrap(),
+        "\"plain_text\""
+    );
+    assert_eq!(
+        serde_json::to_string(&TextObjectType::Markdown).unwrap(),
+        "\"mkdwn\""
+    );
+}
+
+#[test]
 pub fn test_deserialize_bot_message() {
     serde_json::from_str::<Message>(
         r#"{

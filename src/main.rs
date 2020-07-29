@@ -239,7 +239,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                     block_id: None,
                     elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
                         text: slack::TextObject {
-                            ty: "plain_text",
+                            ty: slack::TextObjectType::PlainText,
                             text: Cow::from(title),
                             emoji: None,
                             verbatim: None,
@@ -247,7 +247,7 @@ impl Handler<MessageEvent> for SlackEventActor {
                         action_id: None,
                         url: Some(link),
                         value: None,
-                        style: Some("primary"),
+                        style: Some(slack::ButtonStyle::Primary),
                     })]),
                 }));
             }

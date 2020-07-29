@@ -2,10 +2,18 @@ use std::borrow::Cow;
 
 use serde_derive::{Deserialize, Serialize};
 
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub enum TextObjectType {
+    #[serde(rename = "plain_text")]
+    PlainText,
+    #[serde(rename = "mkdwn")]
+    Markdown,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TextObject<'a> {
     #[serde(rename = "type")]
-    pub ty: &'a str, //plain_text or mkdwn
+    pub ty: TextObjectType,
     pub text: Cow<'a, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emoji: Option<bool>,
@@ -30,6 +38,14 @@ pub struct ActionBlock<'a> {
     pub elements: Option<Vec<BlockElement<'a>>>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub enum ButtonStyle {
+    #[serde(rename = "primary")]
+    Primary,
+    #[serde(rename = "danger")]
+    Danger,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ButtonBlock<'a> {
     pub text: TextObject<'a>,
@@ -40,7 +56,7 @@ pub struct ButtonBlock<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub style: Option<&'a str>, //primary or danger
+    pub style: Option<ButtonStyle>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

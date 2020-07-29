@@ -303,3 +303,6 @@ pub struct MonsterHunterData<'a> {
     pub text: &'a str,
     pub image_url: &'a str,
 }
+
+#[cfg(test)]
+mod test;

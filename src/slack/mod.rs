@@ -67,7 +67,7 @@ pub enum BlockElement<'a> {
         elements: Vec<Box<BlockElement<'a>>>,
     },
     Text {
-        text: String,
+        text: Cow<'a, str>,
     },
     Button(ButtonBlock<'a>),
     Section(SectionBlock<'a>),
@@ -84,10 +84,10 @@ pub struct Block<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Reaction {
+pub struct Reaction<'a> {
     pub count: u32,
-    pub name: String,
-    pub users: Vec<String>,
+    pub name: &'a str,
+    pub users: Vec<&'a str>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,7 +105,7 @@ pub struct Icons<'a> {
 
 #[derive(Debug, Deserialize)]
 pub struct MessageCommon<'a> {
-    pub text: String,
+    pub text: Cow<'a, str>,
     pub ts: &'a str,
 }
 
@@ -134,7 +134,7 @@ pub struct ChannelJoinMessage<'a> {
 
 #[derive(Debug, Deserialize)]
 pub struct LinksItem<'a> {
-    pub url: String, //Error("invalid type: string expected a borrowed string", line: 0, column: 0)
+    pub url: Cow<'a, str>, //Error("invalid type: string expected a borrowed string", line: 0, column: 0)
     pub domain: &'a str,
 }
 

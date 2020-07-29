@@ -1,4 +1,6 @@
- #[test]
+use super::*;
+
+#[test]
 pub fn test_deserialize_basic_message() {
     serde_json::from_str::<Message>(
         r#"{

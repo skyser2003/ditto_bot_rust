@@ -9,7 +9,8 @@ edition = "2018"
 [dependencies]
 regex = ""
 url = ""
-anyhow = "*"
+anyhow = "1.0"
+thiserror = "1.0"
 
 reqwest = { version = "0.10", features = ["json"] }
 tokio = { version = "0.2.0", features = ["full"] }

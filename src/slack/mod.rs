@@ -1,6 +1,42 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fmt::{Debug, Formatter},
+    time::{Duration, SystemTime},
+};
 
 use serde_derive::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
+pub struct StrTimeStamp<'a>(&'a str);
+
+impl<'a> Into<SystemTime> for &StrTimeStamp<'a> {
+    fn into(self) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs_f32(self.0.parse().unwrap())
+    }
+}
+
+impl<'a> Debug for StrTimeStamp<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let t: SystemTime = self.into();
+        write!(f, "{}({:?})", self.0, t)
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
+pub struct NumericTimeStamp(u64);
+
+impl Into<SystemTime> for &NumericTimeStamp {
+    fn into(self) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(self.0)
+    }
+}
+
+impl Debug for NumericTimeStamp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let t: SystemTime = self.into();
+        write!(f, "{}({:?})", self.0, t)
+    }
+}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub enum TextObjectType {
@@ -108,7 +144,7 @@ pub struct Reaction<'a> {
 
 #[derive(Debug, Deserialize)]
 pub struct Edited<'a> {
-    pub ts: &'a str,
+    pub ts: StrTimeStamp<'a>,
     pub user: &'a str,
 }
 
@@ -122,7 +158,8 @@ pub struct Icons<'a> {
 #[derive(Debug, Deserialize)]
 pub struct MessageCommon<'a> {
     pub text: Cow<'a, str>,
-    pub ts: &'a str,
+    #[serde(borrow)]
+    pub ts: StrTimeStamp<'a>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,7 +307,7 @@ pub struct EventCallback<'a> {
     pub authed_users: Vec<&'a str>,
     pub event: InternalEvent<'a>,
     pub event_id: &'a str,
-    pub event_time: u64,
+    pub event_time: NumericTimeStamp,
     pub team_id: &'a str,
     pub token: &'a str,
 }

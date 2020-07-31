@@ -7,7 +7,7 @@ use ctrlc;
 use futures::executor;
 use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
-use log::{debug, info};
+use log::{debug, info, error};
 use rand::prelude::*;
 use regex::Regex;
 use reqwest;
@@ -17,9 +17,10 @@ use sha2::Sha256;
 use std::borrow::Cow;
 use std::env;
 use std::fs::File;
-use std::io::BufReader;
-use unescape::unescape;
-use url::Url;
+use std::{
+    convert::{TryFrom, TryInto},
+    io::BufReader,
+};
 
 mod slack;
 
@@ -30,25 +31,39 @@ struct MessageEvent {
     link: Option<String>,
 }
 
-impl MessageEvent {
-    fn from_slack_event(msg: &slack::Message) -> Result<Self, Error> {
-        match msg {
-            slack::Message::BasicMessage(msg) => Ok(Self {
+#[derive(Debug, thiserror::Error)]
+pub enum ConvertMessageEventError {
+    #[error("Invalid message type")]
+    InvalidMessageType,
+    #[error("Failed while unescape message text")]
+    UnescapeFail,
+}
+
+impl TryFrom<&slack::InternalEvent<'_>> for MessageEvent {
+    type Error = ConvertMessageEventError;
+
+    fn try_from(val: &slack::InternalEvent) -> Result<Self, Self::Error> {
+        match val {
+            slack::InternalEvent::Message(slack::Message::BasicMessage(msg)) => {
+                if let Some(escaped_msg) = unescape::unescape(&msg.common.text) {
+                    Ok(Self {
+                        user: msg.user.to_string(),
+                        channel: msg.channel.to_string(),
+                        text: escaped_msg,
+                        link: None,
+                    })
+                } else {
+                    Err(ConvertMessageEventError::UnescapeFail)
+                }
+            }
+            slack::InternalEvent::LinkShared(msg) => Ok(Self {
                 user: msg.user.to_string(),
                 channel: msg.channel.to_string(),
-                text: msg.common.text.to_string(),
-                link: None,
+                text: "".to_string(),
+                link: Some(msg.links[0].url.to_string()),
             }),
-            _ => Err(anyhow!("Invalid event")),
+            _ => Err(ConvertMessageEventError::InvalidMessageType),
         }
-    }
-    fn from_slack_link_event(msg: &slack::LinkSharedMessage) -> Result<Self, Error> {
-        Ok(Self {
-            user: msg.user.to_string(),
-            channel: msg.channel.to_string(),
-            text: "".to_string(),
-            link: Option::Some(msg.links[0].url.to_string()),
-        })
     }
 }
 
@@ -353,18 +368,19 @@ async fn normal_handler(
                 .body(challenge.to_string()))
         }
         slack::SlackEvent::EventCallback(event_callback) => {
-            if let Ok(message) = match event_callback.event {
-                slack::InternalEvent::Message(message) => MessageEvent::from_slack_event(&message),
-                slack::InternalEvent::LinkShared(message) => {
-                    MessageEvent::from_slack_link_event(&message)
-                }
-            } {
-                state.sender.do_send(message);
-            }
+            match (&event_callback.event).try_into() {
+                Ok(msg) => {
+                    state.sender.do_send(msg);
 
-            Ok(HttpResponse::build(StatusCode::OK)
-                .content_type("text/html; charset=utf-8")
-                .body(body))
+                    Ok(HttpResponse::build(StatusCode::OK)
+                        .content_type("text/html; charset=utf-8")
+                        .body(body))
+                }
+                Err(e) => {
+                    error!("Message conversion fail - {:?}", e);
+                    Ok(HttpResponse::BadRequest().finish())
+                },
+            }
         }
     }
 }

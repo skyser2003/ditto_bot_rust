@@ -43,6 +43,7 @@ steps:
     image: rust
     commands:
       - rustup update
-      - rustup component add clippy
+      - rustup component add clippy rustfmt
       - cargo clippy
+      - cargo fmt -- --check
   

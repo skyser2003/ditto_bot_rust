@@ -2,19 +2,16 @@ use actix::prelude::*;
 use actix::{fut::wrap_future, System};
 use actix_web::http::StatusCode;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
-use anyhow::{anyhow, Error};
+use anyhow::Error;
 use ctrlc;
 use futures::executor;
 use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
 use log::{debug, info, error};
-use rand::prelude::*;
-use regex::Regex;
 use reqwest;
 use rustls::internal::pemfile::{certs, rsa_private_keys};
 use rustls::{NoClientAuth, ServerConfig};
 use sha2::Sha256;
-use std::borrow::Cow;
 use std::env;
 use std::fs::File;
 use std::{
@@ -22,9 +19,10 @@ use std::{
     io::BufReader,
 };
 
+mod modules;
 mod slack;
 
-struct MessageEvent {
+pub struct MessageEvent {
     user: String,
     channel: String,
     text: String,
@@ -145,46 +143,9 @@ impl SlackMessageSender for SlackEventActor {
 }
 
 lazy_static! {
-    static ref TITLE_REGEX: Regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap();
-    static ref MHW_DATA: Vec<slack::MonsterHunterData<'static>> = vec![
-        slack::MonsterHunterData {
-            keywords: vec!["ㄷㄷ", "ㄷㄷ가마루", "도도가마루"],
-            text: "도도가마루",
-            image_url:
-                "https://raw.githubusercontent.com/skyser2003/ditto_bot_rust/master/images/Dodogama.png"
-        },
-        slack::MonsterHunterData {
-            keywords: vec!["ㅊㅊ", "추천"],
-            text: "치치야크",
-            image_url:
-                "https://raw.githubusercontent.com/skyser2003/ditto_bot_rust/master/images/Tzitzi_Ya_Ku.png"
-        },
-        slack::MonsterHunterData {
-            keywords: vec!["ㅈㄹ", "지랄"],
-            text: "조라마그다라오스",
-            image_url:
-                "https://raw.githubusercontent.com/skyser2003/ditto_bot_rust/master/images/Zorah_Magdaros.png"
-        },
-        slack::MonsterHunterData {
-            keywords: vec!["ㄹㅇ", "리얼"],
-            text: "로아루드로스",
-            image_url:
-                "https://raw.githubusercontent.com/skyser2003/ditto_bot_rust/master/images/Royal_Ludroth.png"
-        },
-        slack::MonsterHunterData {
-            keywords: vec!["ㅇㄷ"],
-            text: "오도가론",
-            image_url:
-                "https://raw.githubusercontent.com/skyser2003/ditto_bot_rust/master/images/Odogaron.png"
-        },
-        slack::MonsterHunterData {
-            keywords: vec!["이불", "졸려", "잘래", "잠와", "이블조"],
-            text: "이블조",
-            image_url:
-                "https://raw.githubusercontent.com/skyser2003/ditto_bot_rust/master/images/Evil_Jaw.png"
-        },
-    ];
-    static ref IS_TEST: bool = env::var("TEST").and_then(|test_val| Ok(test_val == "1")).unwrap_or(false);
+    pub static ref IS_TEST: bool = env::var("TEST")
+        .and_then(|test_val| Ok(test_val == "1"))
+        .unwrap_or(false);
     static ref REDIS_ADDRESS: String = env::var("REDIS_ADDRESS").unwrap_or("".to_string());
 }
 
@@ -201,76 +162,12 @@ impl Handler<MessageEvent> for SlackEventActor {
         context.spawn(wrap_future(async move {
             let mut blocks = Vec::<slack::BlockElement>::new();
 
-            ////////////////////////////////////////////////////////////////////////////////////////
-            //                                       Mhw images                                   //
-            ////////////////////////////////////////////////////////////////////////////////////////
-            // TODO: Remove hard coded value
-            if thread_rng().gen_range(0, 100) < 35 {
-                let text = unescape(&msg.text).unwrap();
-
-                for data in &*MHW_DATA {
-                    for keyword in &data.keywords {
-                        if text.contains(keyword) {
-                            blocks.push(slack::BlockElement::Image(slack::ImageBlock {
-                                ty: "image",
-                                image_url: data.image_url,
-                                alt_text: data.text,
-                                title: None,
-                                block_id: None,
-                            }));
-                        }
-                    }
-                }
-            }
-
-            ////////////////////////////////////////////////////////////////////////////////////////
-            //                                    Namuwiki Link                                   //
-            ////////////////////////////////////////////////////////////////////////////////////////
-            if let Some(link) = &msg.link {
-                let parsed_url = Url::parse(link).unwrap();
-                let url_string = parsed_url.host_str().unwrap();
-
-                if url_string != "namu.wiki" {
-                    return;
-                }
-
-                let title = {
-                    let res = reqwest::get(link).await.unwrap();
-                    let body = res.text().await.unwrap();
-
-                    let title_opt = TITLE_REGEX.captures(&body).and_then(|captures| {
-                        captures
-                            .get(1)
-                            .and_then(|match_title| Some(match_title.as_str()))
-                    });
-
-                    match title_opt {
-                        Some(val) => format!("{} - 나무위키", val),
-                        None => "Invalid url".to_string(),
-                    }
-                };
-
-                blocks.push(slack::BlockElement::Actions(slack::ActionBlock {
-                    block_id: None,
-                    elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
-                        text: slack::TextObject {
-                            ty: slack::TextObjectType::PlainText,
-                            text: Cow::from(title),
-                            emoji: None,
-                            verbatim: None,
-                        },
-                        action_id: None,
-                        url: Some(link),
-                        value: None,
-                        style: Some(slack::ButtonStyle::Primary),
-                    })]),
-                }));
-            }
+            modules::mhw::handle(&msg, &mut blocks);
+            modules::namuwiki::handle(&msg, &mut blocks).await;
 
             let request = Self::generate_request(base_request_builder, &msg.channel, &blocks);
             send_request(request).await;
         }));
-
         Ok(())
     }
 }

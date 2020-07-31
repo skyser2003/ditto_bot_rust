@@ -32,7 +32,6 @@ sha2 = "0.8.1"
 futures = "0.3"
 lazy_static = "1.4.0"
 rand = "0.7.3"
-unescape = "0.1.0"
 redis = "0.16.0"
 
 log = "0.4.11"

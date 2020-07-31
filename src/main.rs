@@ -33,8 +33,6 @@ pub struct MessageEvent {
 pub enum ConvertMessageEventError {
     #[error("Invalid message type")]
     InvalidMessageType,
-    #[error("Failed while unescape message text")]
-    UnescapeFail,
 }
 
 impl TryFrom<&slack::InternalEvent<'_>> for MessageEvent {
@@ -42,18 +40,12 @@ impl TryFrom<&slack::InternalEvent<'_>> for MessageEvent {
 
     fn try_from(val: &slack::InternalEvent) -> Result<Self, Self::Error> {
         match val {
-            slack::InternalEvent::Message(slack::Message::BasicMessage(msg)) => {
-                if let Some(escaped_msg) = unescape::unescape(&msg.common.text) {
-                    Ok(Self {
-                        user: msg.user.to_string(),
-                        channel: msg.channel.to_string(),
-                        text: escaped_msg,
-                        link: None,
-                    })
-                } else {
-                    Err(ConvertMessageEventError::UnescapeFail)
-                }
-            }
+            slack::InternalEvent::Message(slack::Message::BasicMessage(msg)) => Ok(Self {
+                user: msg.user.to_string(),
+                channel: msg.channel.to_string(),
+                text: msg.common.text.to_string(),
+                link: None,
+            }),
             slack::InternalEvent::LinkShared(msg) => Ok(Self {
                 user: msg.user.to_string(),
                 channel: msg.channel.to_string(),
@@ -276,7 +268,7 @@ async fn normal_handler(
                 Err(e) => {
                     error!("Message conversion fail - {:?}", e);
                     Ok(HttpResponse::BadRequest().finish())
-                },
+                }
             }
         }
     }

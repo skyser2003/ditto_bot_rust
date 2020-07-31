@@ -33,11 +33,11 @@ steps:
   kind: pipeline
   type: docker
   name: ditto_bot_rust_ci
-  
+
   platform:
     os: linux
     arch: arm64
-  
+
   steps:
   - name: ci
     image: rust
@@ -46,4 +46,3 @@ steps:
       - rustup component add clippy rustfmt
       - cargo clippy
       - cargo fmt -- --check
-  

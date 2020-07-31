@@ -7,7 +7,7 @@ use ctrlc;
 use futures::executor;
 use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
-use log::{debug, info, error};
+use log::{debug, error, info};
 use reqwest;
 use rustls::internal::pemfile::{certs, rsa_private_keys};
 use rustls::{NoClientAuth, ServerConfig};

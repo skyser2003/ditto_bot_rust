@@ -314,11 +314,5 @@ pub struct PostMessage<'a> {
     // pub as_user: Option<bool>,
 }
 
-pub struct MonsterHunterData<'a> {
-    pub keywords: Vec<&'a str>,
-    pub text: &'a str,
-    pub image_url: &'a str,
-}
-
 #[cfg(test)]
 mod test;

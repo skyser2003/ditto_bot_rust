@@ -20,21 +20,27 @@ jobs:
     - name: Check format
       run: cargo fmt -- --check
 
-    - name: Check clippy
-      run: cargo clippy
-
     - name: Check editorconfig
       run: |
         VERSION="2.1.0"
         OS="linux"
         case $(uname -m) in
-        armhf) ARCH="arm"
-        x86_64) ARCH="amd64"
-        i386) ARCH="386"
+        armhf)
+          ARCH="arm"
+          ;;
+        x86_64)
+          ARCH="amd64"
+          ;;
+        i386)
+          ARCH="386"
+          ;;
         esac
         curl -O -L -C - https://github.com/editorconfig-checker/editorconfig-checker/releases/download/$VERSION/ec-$OS-$ARCH.tar.gz
         tar xzf ec-$OS-$ARCH.tar.gz
         ./bin/ec-$OS-$ARCH
+
+    - name: Check clippy
+      run: cargo clippy
 
     - name: Build
       run: cargo build --verbose

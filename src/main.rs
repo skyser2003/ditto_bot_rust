@@ -3,12 +3,10 @@ use actix::{fut::wrap_future, System};
 use actix_web::http::StatusCode;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use anyhow::Error;
-use ctrlc;
 use futures::executor;
 use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
 use log::{debug, error, info};
-use reqwest;
 use rustls::internal::pemfile::{certs, rsa_private_keys};
 use rustls::{NoClientAuth, ServerConfig};
 use sha2::Sha256;
@@ -73,17 +71,12 @@ where
     Self: Actor,
 {
     fn base_request_builder(&self) -> reqwest::RequestBuilder;
-    fn send(
-        &mut self,
-        context: &mut Self::Context,
-        channel: &str,
-        blocks: &Vec<slack::BlockElement>,
-    );
+    fn send(&mut self, context: &mut Self::Context, channel: &str, blocks: &[slack::BlockElement]);
 
     fn generate_request(
         request_builder: reqwest::RequestBuilder,
         channel: &str,
-        blocks: &Vec<slack::BlockElement<'_>>,
+        blocks: &[slack::BlockElement<'_>],
     ) -> reqwest::RequestBuilder;
 }
 
@@ -111,7 +104,7 @@ impl SlackMessageSender for SlackEventActor {
         &mut self,
         context: &mut Self::Context,
         channel: &str,
-        blocks: &Vec<slack::BlockElement<'_>>,
+        blocks: &[slack::BlockElement<'_>],
     ) {
         let base_request_builder = self.base_request_builder();
         let request_builder = Self::generate_request(base_request_builder, channel, &blocks);
@@ -122,7 +115,7 @@ impl SlackMessageSender for SlackEventActor {
     fn generate_request(
         request_builder: reqwest::RequestBuilder,
         channel: &str,
-        blocks: &Vec<slack::BlockElement<'_>>,
+        blocks: &[slack::BlockElement<'_>],
     ) -> reqwest::RequestBuilder {
         let reply = slack::PostMessage {
             channel,
@@ -136,9 +129,9 @@ impl SlackMessageSender for SlackEventActor {
 
 lazy_static! {
     pub static ref IS_TEST: bool = env::var("TEST")
-        .and_then(|test_val| Ok(test_val == "1"))
+        .map(|test_val| test_val == "1")
         .unwrap_or(false);
-    static ref REDIS_ADDRESS: String = env::var("REDIS_ADDRESS").unwrap_or("".to_string());
+    static ref REDIS_ADDRESS: String = env::var("REDIS_ADDRESS").unwrap_or_else(|_| "".to_string());
 }
 
 impl Handler<MessageEvent> for SlackEventActor {
@@ -193,7 +186,7 @@ async fn normal_handler(
         ""
     };
 
-    if *IS_TEST == false {
+    if !(*IS_TEST) {
         let (slack_signature, slack_timestamp) = if let (Some(sig), Some(ts)) = (
             req.headers()
                 .get("X-Slack-Signature")
@@ -289,7 +282,7 @@ fn main() -> std::io::Result<()> {
     let system = System::new("slack");
 
     let slack_event_actor = SlackEventActor {
-        bot_token: bot_token.clone(),
+        bot_token,
         bot_id: "URS3HL8SD".to_string(), //TODO: remove hardcoded value
         slack_client: reqwest::Client::new(),
         redis_client: None,
@@ -324,7 +317,7 @@ fn main() -> std::io::Result<()> {
             let cert_chain = certs(cert_file).unwrap();
             let mut keys = rsa_private_keys(key_file).unwrap();
 
-            if keys.len() == 0 {
+            if keys.is_empty() {
                 panic!("Fails to load a private key file. Check it is formatted in RSA.")
             }
             config.set_single_cert(cert_chain, keys.remove(0)).unwrap();

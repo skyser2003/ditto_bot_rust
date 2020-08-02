@@ -113,10 +113,10 @@ pub struct ImageBlock<'a> {
 pub enum BlockElement<'a> {
     RichText {
         block_id: &'a str,
-        elements: Vec<Box<BlockElement<'a>>>,
+        elements: Vec<BlockElement<'a>>,
     },
     RichTextSection {
-        elements: Vec<Box<BlockElement<'a>>>,
+        elements: Vec<BlockElement<'a>>,
     },
     Text {
         text: Cow<'a, str>,
@@ -236,11 +236,11 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
                     match kv {
                         ("subtype", v) => {
                             if tag.is_some() {
-                                Err(serde::de::Error::duplicate_field("subtype"))?;
+                                return Err(serde::de::Error::duplicate_field("subtype"));
                             }
                             tag = Some(match v.as_str() {
                                 Some(subtype) => subtype.to_string(),
-                                None => Err(serde::de::Error::missing_field("subtype"))?,
+                                None => return Err(serde::de::Error::missing_field("subtype")),
                             });
                         }
                         (k, v) => {
@@ -249,7 +249,7 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
                     }
                 }
                 Ok(TaggedContent {
-                    tag: tag.unwrap_or("".to_string()),
+                    tag: tag.unwrap_or_else(|| "".to_string()),
                     content: Content::Map(vec),
                 })
             }
@@ -281,7 +281,7 @@ impl<'de> serde::Deserialize<'de> for Message<'de> {
                         ),
                         $v_type,
                     ),)*
-                    _ => Err(serde::de::Error::unknown_variant(&tagged.tag, &[$($field),*]))?
+                    _ => Err(serde::de::Error::unknown_variant(&tagged.tag, &[$($field),*]))
                 }
             }
         }
@@ -347,7 +347,7 @@ pub struct PostMessage<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<&'a str>, // alternative text when blocks are not given (or cannot be displayed).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub blocks: Option<&'a Vec<BlockElement<'a>>>,
+    pub blocks: Option<&'a [BlockElement<'a>]>,
     // pub as_user: Option<bool>,
 }
 

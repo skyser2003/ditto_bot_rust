@@ -21,11 +21,9 @@ pub async fn handle<'a>(msg: &'a MessageEvent, blocks: &mut Vec<slack::BlockElem
             let res = reqwest::get(link).await.unwrap();
             let body = res.text().await.unwrap();
 
-            let title_opt = TITLE_REGEX.captures(&body).and_then(|captures| {
-                captures
-                    .get(1)
-                    .and_then(|match_title| Some(match_title.as_str()))
-            });
+            let title_opt = TITLE_REGEX
+                .captures(&body)
+                .and_then(|captures| captures.get(1).map(|match_title| match_title.as_str()));
 
             match title_opt {
                 Some(val) => format!("{} - 나무위키", val),

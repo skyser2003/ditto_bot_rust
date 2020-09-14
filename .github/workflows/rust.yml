@@ -10,13 +10,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  test_and_check:
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v2
-    - uses: crazy-max/ghaction-docker-buildx@v3
 
     - name: Check format
       run: cargo fmt -- --check
@@ -40,14 +38,21 @@ jobs:
         tar xzf ec-$OS-$ARCH.tar.gz
         ./bin/ec-$OS-$ARCH
 
+    - name: Run tests
+      run: cargo test --verbose
+
     - name: Check clippy
       run: cargo clippy
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: crazy-max/ghaction-docker-buildx@v3
 
     - name: Build & Push
       run: docker buildx build --push -f docker/Dockerfile -t ${{secrets.DITTO_BOT_IMAGE_NAME}} .
 
     - name: Publish
       run: curl -X POST ${{secrets.PORTAINER_WEBHOOK}}
-
-    - name: Run tests
-      run: cargo test --verbose

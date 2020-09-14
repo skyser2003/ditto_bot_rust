@@ -12,5 +12,8 @@ RUN rustup target add aarch64-unknown-linux-gnu
 RUN cargo update
 RUN cargo build --release --target=aarch64-unknown-linux-gnu
 
+
 FROM --platform=linux/arm64 rust
+WORKDIR /project
+
 CMD cargo run --release

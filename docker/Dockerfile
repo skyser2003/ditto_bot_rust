@@ -17,4 +17,6 @@ FROM --platform=linux/arm64 rust
 WORKDIR /project
 COPY --from=0 /project .
 
+RUN mkdir target && mv target/aarch64-unknown-linux-gnu/ target/
+
 CMD cargo run --release

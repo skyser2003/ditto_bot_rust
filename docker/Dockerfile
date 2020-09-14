@@ -15,5 +15,6 @@ RUN cargo build --release --target=aarch64-unknown-linux-gnu
 
 FROM --platform=linux/arm64 rust
 WORKDIR /project
+COPY --from=0 /project .
 
 CMD cargo run --release

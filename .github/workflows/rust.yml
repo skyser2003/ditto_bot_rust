@@ -16,6 +16,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - uses: crazy-max/ghaction-docker-buildx@v3
 
     - name: Check format
       run: cargo fmt -- --check
@@ -43,7 +44,13 @@ jobs:
       run: cargo clippy
 
     - name: Build
-      run: cargo build --verbose
+      run: docker buildx build -f docker/Dockerfile -t ${{secrets.DITTO_BOT_IMAGE_NAME}} .
+
+    - name: Push
+      run: docker push ${{secrets.DITTO_BOT_IMAGE_NAME}}
+
+    - name: Publish
+      run: curl -X POST ${{secrets.PORTAINER_WEBHOOK}}
 
     - name: Run tests
       run: cargo test --verbose

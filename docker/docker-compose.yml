@@ -9,5 +9,6 @@ services:
     environment:
       - SLACK_BOT_TOKEN=$SLACK_BOT_TOKEN
       - SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET
+      - REDIS_ADDRESS=$REDIS_ADDRESS
     ports:
       - 2525:8082

@@ -63,7 +63,7 @@ struct SlackEventActor {
     bot_token: String,
     bot_id: String,
     slack_client: reqwest::Client,
-    redis_client: Option<redis::Client>,
+    redis_client: redis::Client,
 }
 
 trait SlackMessageSender
@@ -141,6 +141,10 @@ impl Handler<MessageEvent> for SlackEventActor {
         if msg.user.contains(&self.bot_id) {
             return Ok(());
         }
+
+        modules::surplus::handle(&msg, &self.redis_client).unwrap_or_else(|err| {
+            error!("Chat redis record fail: {}", err);
+        });
 
         let base_request_builder = self.base_request_builder();
 
@@ -285,7 +289,7 @@ fn main() -> std::io::Result<()> {
         bot_token,
         bot_id: "URS3HL8SD".to_string(), //TODO: remove hardcoded value
         slack_client: reqwest::Client::new(),
-        redis_client: None,
+        redis_client: redis::Client::open(format!("redis://{}", *REDIS_ADDRESS)).unwrap(),
     }
     .start();
 

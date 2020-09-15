@@ -1,4 +1,4 @@
-[![Build Status](https://cloud.drone.io/api/badges/skyser2003/ditto_bot_rust/status.svg)](https://cloud.drone.io/skyser2003/ditto_bot_rust)
+[![Build, deploy, test](https://github.com/actions/hello-world/workflows/rust/badge.svg)](https://github.com/skyser2003/ditto_bot_rust/actions?query=workflow%3ARust)
 
 # Usage
 

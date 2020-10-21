@@ -16,8 +16,10 @@ pub fn handle<'a>(
         if call_type == "잉여" {
             if slices.len() == 3 && slices[2] == "all" {
                 // TODO: calculate all user's chat count
+                println!("잉여 is called");
             } else {
                 // TODO: calculate top 5 user's chat count
+                println!("잉여 all is called");
             }
         }
     } else {

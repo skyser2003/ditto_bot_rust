@@ -132,6 +132,7 @@ lazy_static! {
         .map(|test_val| test_val == "1")
         .unwrap_or(false);
     static ref REDIS_ADDRESS: String = env::var("REDIS_ADDRESS").unwrap_or_else(|_| "".to_string());
+    static ref BOT_ID: String = env::var("BOT_ID").unwrap_or_else(|_| "".to_string());
 }
 
 impl Handler<MessageEvent> for SlackEventActor {
@@ -142,7 +143,7 @@ impl Handler<MessageEvent> for SlackEventActor {
             return Ok(());
         }
 
-        modules::surplus::handle(&msg, &self.redis_client).unwrap_or_else(|err| {
+        modules::surplus::handle(&msg, &self.redis_client, &*BOT_ID).unwrap_or_else(|err| {
             error!("Chat redis record fail: {}", err);
         });
 

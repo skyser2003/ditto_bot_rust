@@ -8,7 +8,7 @@ pub fn handle<'a>(
     bot_id: &String,
 ) -> redis::RedisResult<()> {
     let slices = msg.text.split_whitespace().collect::<Vec<&str>>();
-    let slack_bot_format = format!("@<{}>", bot_id);
+    let slack_bot_format = format!("<@{}>", bot_id);
 
     if 2 <= slices.len() && slices[0] == slack_bot_format {
         let call_type = slices[1];

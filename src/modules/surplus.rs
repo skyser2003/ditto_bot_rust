@@ -10,8 +10,8 @@ pub fn handle<'a>(
     let slices = msg.text.split_whitespace().collect::<Vec<&str>>();
     let slack_bot_format = format!("@<{}>", bot_id);
 
-    if slices[1] == slack_bot_format {
-        let call_type = slices[0];
+    if 2 <= slices.len() && slices[0] == slack_bot_format {
+        let call_type = slices[1];
 
         if call_type == "잉여" {
             if slices.len() == 3 && slices[2] == "all" {

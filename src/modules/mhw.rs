@@ -1,4 +1,4 @@
-use crate::{slack, MessageEvent};
+use crate::slack;
 use lazy_static::lazy_static;
 use rand::{thread_rng, Rng};
 
@@ -49,12 +49,12 @@ lazy_static! {
     ];
 }
 
-pub fn handle(msg: &MessageEvent, blocks: &mut Vec<slack::BlockElement>) {
+pub fn handle(text: &String, blocks: &mut Vec<slack::BlockElement>) {
     // TODO: Remove hard coded value
     if thread_rng().gen_range(0, 100) < 35 {
         for data in &*MHW_DATA {
             for keyword in &data.keywords {
-                if msg.text.contains(keyword) {
+                if text.contains(keyword) {
                     blocks.push(slack::BlockElement::Image(slack::ImageBlock {
                         ty: "image",
                         image_url: data.image_url,

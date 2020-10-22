@@ -1,4 +1,4 @@
-use crate::{slack, MessageEvent};
+use crate::slack;
 use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest::Url;
@@ -8,9 +8,9 @@ lazy_static! {
     static ref TITLE_REGEX: Regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap();
 }
 
-pub async fn handle<'a>(msg: &'a MessageEvent, blocks: &mut Vec<slack::BlockElement<'a>>) {
-    if let Some(link) = &msg.link {
-        let parsed_url = Url::parse(link).unwrap();
+pub async fn handle<'a>(link_opt: Option<String>, blocks: &mut Vec<slack::BlockElement<'a>>) {
+    if let Some(link) = link_opt {
+        let parsed_url = Url::parse(&link).unwrap();
         let url_string = parsed_url.host_str().unwrap();
 
         if url_string != "namu.wiki" {
@@ -18,7 +18,7 @@ pub async fn handle<'a>(msg: &'a MessageEvent, blocks: &mut Vec<slack::BlockElem
         }
 
         let title = {
-            let res = reqwest::get(link).await.unwrap();
+            let res = reqwest::get(&link).await.unwrap();
             let body = res.text().await.unwrap();
 
             let title_opt = TITLE_REGEX
@@ -41,7 +41,7 @@ pub async fn handle<'a>(msg: &'a MessageEvent, blocks: &mut Vec<slack::BlockElem
                     verbatim: None,
                 },
                 action_id: None,
-                url: Some(link),
+                url: Some(Cow::from(link)),
                 value: None,
                 style: Some(slack::ButtonStyle::Primary),
             })]),

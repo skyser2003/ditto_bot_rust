@@ -143,19 +143,24 @@ impl Handler<MessageEvent> for SlackEventActor {
             return Ok(());
         }
 
-        modules::surplus::handle(&msg, &self.redis_client, &*BOT_ID).unwrap_or_else(|err| {
+        let text = msg.text;
+        let user = msg.user;
+        let link = msg.link;
+        let channel = msg.channel;
+
+        let mut blocks = Vec::<slack::BlockElement>::new();
+
+        modules::surplus::handle(&text, &user, &mut blocks, &self.redis_client, &*BOT_ID).unwrap_or_else(|err| {
             error!("Chat redis record fail: {}", err);
         });
 
         let base_request_builder = self.base_request_builder();
 
         context.spawn(wrap_future(async move {
-            let mut blocks = Vec::<slack::BlockElement>::new();
+            modules::mhw::handle(&text, &mut blocks);
+            modules::namuwiki::handle(link, &mut blocks).await;
 
-            modules::mhw::handle(&msg, &mut blocks);
-            modules::namuwiki::handle(&msg, &mut blocks).await;
-
-            let request = Self::generate_request(base_request_builder, &msg.channel, &blocks);
+            let request = Self::generate_request(base_request_builder, &channel, &blocks);
             send_request(request).await;
         }));
         Ok(())

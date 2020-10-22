@@ -88,7 +88,7 @@ pub struct ButtonBlock<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<&'a str>,
+    pub url: Option<Cow<'a, str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]

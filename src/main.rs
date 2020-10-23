@@ -279,6 +279,8 @@ async fn normal_handler(
 }
 
 fn main() -> std::io::Result<()> {
+    env_logger::init();
+
     let bot_token = match env::var("SLACK_BOT_TOKEN") {
         Ok(val) => val,
         Err(_e) => panic!("Bot token is not given."),

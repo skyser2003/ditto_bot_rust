@@ -150,9 +150,10 @@ impl Handler<MessageEvent> for SlackEventActor {
 
         let mut blocks = Vec::<slack::BlockElement>::new();
 
-        modules::surplus::handle(&text, &user, &mut blocks, &self.redis_client, &*BOT_ID).unwrap_or_else(|err| {
-            error!("Chat redis record fail: {}", err);
-        });
+        modules::surplus::handle(&text, &user, &mut blocks, &self.redis_client, &*BOT_ID)
+            .unwrap_or_else(|err| {
+                error!("Chat redis record fail: {}", err);
+            });
 
         let base_request_builder = self.base_request_builder();
 

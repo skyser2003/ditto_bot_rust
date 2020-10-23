@@ -23,7 +23,7 @@ pub fn handle<'a>(
             let records: Vec<String> = conn.zrangebyscore("ditto-archive", "-inf", "+inf").unwrap();
 
             for record in records {
-                let user_id = record.split(":").nth(0).unwrap().to_string();
+                let user_id = record.split(":").nth(1).unwrap().to_string();
 
                 let prev_count = table.get(&user_id);
                 let next_count = match prev_count {

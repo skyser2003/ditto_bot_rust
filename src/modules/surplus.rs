@@ -41,7 +41,7 @@ pub fn handle<'a>(
                 vec_table.push((pair.0.to_string(), *pair.1));
             }
 
-            vec_table.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            vec_table.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
             if slices.len() <= 2 || slices[2] != "all" {
                 // Top 5 user's chat count only

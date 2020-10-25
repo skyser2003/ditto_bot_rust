@@ -12,6 +12,7 @@ pub fn handle<'a>(
 ) -> redis::RedisResult<()> {
     let slices = text.split_whitespace().collect::<Vec<&str>>();
     let slack_bot_format = format!("<@{}>", bot_id);
+    println!("{}", slack_bot_format);
 
     if 2 <= slices.len() && slices[0] == slack_bot_format {
         let call_type = slices[1];
@@ -48,9 +49,16 @@ pub fn handle<'a>(
             }
 
             if vec_table.len() != 0 {
-                blocks.push(slack::BlockElement::Text {
-                    text: Cow::from("니들은 어차피 다 잉여임 this is test"),
-                });
+                blocks.push(slack::BlockElement::Section(slack::SectionBlock {
+                    text: slack::TextObject {
+                        ty: slack::TextObjectType::PlainText,
+                        text: Cow::from("니들은 어차피 다 잉여임 this is test"),
+                        emoji: None,
+                        verbatim: None,
+                    },
+                    block_id: None,
+                    fields: None,
+                }));
             }
         }
     } else {

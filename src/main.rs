@@ -152,14 +152,14 @@ impl Handler<MessageEvent> for SlackEventActor {
 
         let mut conn = self.redis_client.get_connection().unwrap();
 
-        modules::surplus::handle(&text, &user, &mut blocks, &mut conn, &*BOT_ID)
-            .unwrap_or_else(|err| {
-                error!("Chat redis record fail: {}", err);
-            });
-
         let base_request_builder = self.base_request_builder();
 
         context.spawn(wrap_future(async move {
+            modules::surplus::handle(&text, &user, &mut blocks, &mut conn, &*BOT_ID)
+                .unwrap_or_else(|err| {
+                    error!("Chat redis record fail: {}", err);
+                });
+
             modules::mhw::handle(&text, &mut blocks);
             modules::namuwiki::handle(link, &mut blocks).await;
 

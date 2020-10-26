@@ -21,6 +21,21 @@ pub async fn handle<'a>(
 
             let records: Vec<String> = conn.zrangebyscore("ditto-archive", "-inf", "+inf").unwrap();
 
+            if records.len() == 0 {
+                blocks.push(slack::BlockElement::Section(slack::SectionBlock {
+                    text: slack::TextObject {
+                        ty: slack::TextObjectType::PlainText,
+                        text: Cow::from("[채팅 기록이 없습니다.]"),
+                        emoji: None,
+                        verbatim: None,
+                    },
+                    block_id: None,
+                    fields: None,
+                }));
+
+                return Ok(());
+            }
+
             for record in records {
                 let user_id = record.split(":").nth(1).unwrap().to_string();
 
@@ -46,18 +61,16 @@ pub async fn handle<'a>(
                 vec_table.truncate(5);
             }
 
-            if vec_table.len() != 0 {
-                blocks.push(slack::BlockElement::Section(slack::SectionBlock {
-                    text: slack::TextObject {
-                        ty: slack::TextObjectType::PlainText,
-                        text: Cow::from("니들은 어차피 다 잉여임 this is test"),
-                        emoji: None,
-                        verbatim: None,
-                    },
-                    block_id: None,
-                    fields: None,
-                }));
-            }
+            blocks.push(slack::BlockElement::Section(slack::SectionBlock {
+                text: slack::TextObject {
+                    ty: slack::TextObjectType::PlainText,
+                    text: Cow::from("니들은 어차피 다 잉여임 this is test"),
+                    emoji: None,
+                    verbatim: None,
+                },
+                block_id: None,
+                fields: None,
+            }));
         }
     } else {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();

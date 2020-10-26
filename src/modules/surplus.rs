@@ -1,5 +1,5 @@
 use crate::slack;
-use redis::{Client, Commands};
+use redis::{Commands, Connection};
 use std::borrow::Cow;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -7,7 +7,7 @@ pub fn handle<'a>(
     text: &String,
     user: &String,
     blocks: &mut Vec<slack::BlockElement<'a>>,
-    redis_client: &Client,
+    conn: &mut Connection,
     bot_id: &String,
 ) -> redis::RedisResult<()> {
     let slices = text.split_whitespace().collect::<Vec<&str>>();
@@ -19,7 +19,6 @@ pub fn handle<'a>(
         if call_type == "잉여" {
             let mut table = std::collections::HashMap::<String, i32>::new();
 
-            let mut conn = redis_client.get_connection().unwrap();
             let records: Vec<String> = conn.zrangebyscore("ditto-archive", "-inf", "+inf").unwrap();
 
             for record in records {
@@ -65,7 +64,6 @@ pub fn handle<'a>(
         let score = now.as_millis();
         let member = format!("{}:{}", score, user);
 
-        let mut conn = redis_client.get_connection().unwrap();
         conn.zadd("ditto-archive", member, score as i64)?;
     }
 

@@ -156,6 +156,7 @@ impl Handler<MessageEvent> for SlackEventActor {
 
         context.spawn(wrap_future(async move {
             modules::surplus::handle(&text, &user, &mut blocks, &mut conn, &*BOT_ID)
+                .await
                 .unwrap_or_else(|err| {
                     error!("Chat redis record fail: {}", err);
                 });

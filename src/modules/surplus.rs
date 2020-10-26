@@ -3,7 +3,7 @@ use redis::{Commands, Connection};
 use std::borrow::Cow;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub fn handle<'a>(
+pub async fn handle<'a>(
     text: &String,
     user: &String,
     blocks: &mut Vec<slack::BlockElement<'a>>,

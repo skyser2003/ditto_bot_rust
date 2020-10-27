@@ -1,4 +1,5 @@
 use crate::slack;
+use log::debug;
 use redis::{Commands, Connection};
 use std::borrow::Cow;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -79,6 +80,8 @@ pub async fn handle<'a>(
 
         conn.zadd("ditto-archive", member, score as i64)?;
     }
+
+    debug!("{:?}", blocks);
 
     Ok(())
 }

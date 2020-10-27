@@ -25,7 +25,7 @@ pub async fn handle<'a>(
                 blocks.push(slack::BlockElement::Section(slack::SectionBlock {
                     text: slack::TextObject {
                         ty: slack::TextObjectType::PlainText,
-                        text: Cow::from("[채팅 기록이 없습니다.]"),
+                        text: Cow::from("[There is no chat record.]"),
                         emoji: None,
                         verbatim: None,
                     },
@@ -64,7 +64,7 @@ pub async fn handle<'a>(
             blocks.push(slack::BlockElement::Section(slack::SectionBlock {
                 text: slack::TextObject {
                     ty: slack::TextObjectType::PlainText,
-                    text: Cow::from("니들은 어차피 다 잉여임 this is test"),
+                    text: Cow::from("[You guys are all ingyeo.]"),
                     emoji: None,
                     verbatim: None,
                 },

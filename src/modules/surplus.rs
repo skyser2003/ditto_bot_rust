@@ -72,6 +72,8 @@ pub async fn handle<'a>(
                 block_id: None,
                 fields: None,
             }));
+
+            debug!("Blocks: {:?}", blocks);
         }
     } else {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
@@ -80,8 +82,6 @@ pub async fn handle<'a>(
 
         conn.zadd("ditto-archive", member, score as i64)?;
     }
-
-    debug!("{:?}", blocks);
 
     Ok(())
 }

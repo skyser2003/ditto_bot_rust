@@ -12,3 +12,17 @@ services:
       - REDIS_ADDRESS=$REDIS_ADDRESS
     ports:
       - 2525:8082
+  redis:
+    image: redis:alpine
+    command: redis-server --appendonly yes
+    hostname: redis
+    ports:
+      - 6379:6379
+    volumes:
+      - redis-data:/data
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == jetson
+volumes:
+  redis-data:

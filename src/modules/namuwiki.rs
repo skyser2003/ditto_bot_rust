@@ -18,7 +18,10 @@ pub async fn handle<'a>(link_opt: Option<String>, blocks: &mut Vec<slack::BlockE
         }
 
         let title = {
-            let res = reqwest::get(&link).await.unwrap();
+            let client = reqwest::Client::builder()
+                .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0")
+                .build().unwrap();
+            let res = client.get(&link).send().await.unwrap();
             let body = res.text().await.unwrap();
 
             let title_opt = TITLE_REGEX

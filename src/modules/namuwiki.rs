@@ -8,22 +8,24 @@ lazy_static! {
     static ref TITLE_REGEX: Regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap();
 }
 
-pub async fn handle<'a>(link_opt: Option<String>, blocks: &mut Vec<slack::BlockElement<'a>>) {
+pub async fn handle<'a>(
+    link_opt: Option<String>,
+    blocks: &mut Vec<slack::BlockElement<'a>>,
+) -> anyhow::Result<()> {
     if let Some(link) = link_opt {
-        let parsed_url = Url::parse(&link).unwrap();
-        let url_string = parsed_url.host_str().unwrap();
+        let parsed_url = Url::parse(&link)?;
+        let url_string = parsed_url.host_str().unwrap_or_default();
 
         if url_string != "namu.wiki" {
-            return;
+            return Ok(());
         }
 
         let title = {
             let client = reqwest::Client::builder()
                 .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0")
-                .build()
-                .unwrap();
-            let res = client.get(&link).send().await.unwrap();
-            let body = res.text().await.unwrap();
+                .build()?;
+            let res = client.get(&link).send().await?;
+            let body = res.text().await?;
 
             let title_opt = TITLE_REGEX
                 .captures(&body)
@@ -51,4 +53,5 @@ pub async fn handle<'a>(link_opt: Option<String>, blocks: &mut Vec<slack::BlockE
             })]),
         }));
     }
+    Ok(())
 }

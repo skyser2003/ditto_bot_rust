@@ -162,7 +162,10 @@ impl Handler<MessageEvent> for SlackEventActor {
                 });
 
             modules::mhw::handle(&text, &mut blocks);
-            modules::namuwiki::handle(link, &mut blocks).await;
+            let namu_ret = modules::namuwiki::handle(link, &mut blocks).await;
+            if namu_ret.is_err() {
+                error!("Fail to handle a namuwiki request.")
+            }
 
             let request = Self::generate_request(base_request_builder, &channel, &blocks);
             send_request(request).await;

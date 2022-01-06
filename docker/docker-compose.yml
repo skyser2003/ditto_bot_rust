@@ -11,6 +11,7 @@ services:
       - SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET
       - REDIS_ADDRESS=$REDIS_ADDRESS
       - RUST_LOG=$RUST_LOG
+      - BOT_ID=$BOT_ID
     ports:
       - 2525:8082
   redis:

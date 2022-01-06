@@ -17,6 +17,8 @@ pub async fn handle<'a>(
     if 2 <= slices.len() && slices[0] == slack_bot_format {
         let call_type = slices[1];
 
+        log::debug!("full_text: {:?}, call_type: {:?}", text, call_type);
+
         if call_type == "잉여" {
             let mut table = std::collections::HashMap::<String, i32>::new();
 

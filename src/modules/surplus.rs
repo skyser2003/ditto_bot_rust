@@ -1,8 +1,8 @@
 use crate::slack;
-use std::cmp::{min, max};
 use log::debug;
 use redis::{Commands, Connection};
 use std::borrow::Cow;
+use std::cmp::{max, min};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn handle<'a>(

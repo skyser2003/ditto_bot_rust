@@ -148,6 +148,7 @@ impl Handler<MessageEvent> for SlackEventActor {
         let user = msg.user;
         let link = msg.link;
         let channel = msg.channel;
+        let bot_token = self.bot_token.to_string();
 
         let mut blocks = Vec::<slack::BlockElement>::new();
 
@@ -156,7 +157,7 @@ impl Handler<MessageEvent> for SlackEventActor {
         let base_request_builder = self.base_request_builder();
 
         context.spawn(wrap_future(async move {
-            modules::surplus::handle(&text, &user, &mut blocks, &mut conn, &bot_id)
+            modules::surplus::handle(&text, &user, &mut blocks, &mut conn, &bot_id, &bot_token)
                 .await
                 .unwrap_or_else(|err| {
                     error!("Chat redis record fail: {}", err);

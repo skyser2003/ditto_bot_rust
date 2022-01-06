@@ -299,11 +299,15 @@ fn main() -> std::io::Result<()> {
         Err(_e) => panic!("Signing secret is not given."),
     };
 
+    let bot_id = &*BOT_ID;
+
+    info!("Slack bot id: {:?}", bot_id);
+
     let system = System::new("slack");
 
     let slack_event_actor = SlackEventActor {
         bot_token,
-        bot_id: BOT_ID.to_string(),
+        bot_id: bot_id.to_string(),
         slack_client: reqwest::Client::new(),
         redis_client: redis::Client::open(format!("redis://{}", *REDIS_ADDRESS)).unwrap(),
     }

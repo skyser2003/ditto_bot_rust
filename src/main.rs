@@ -302,7 +302,7 @@ fn main() -> std::io::Result<()> {
 
     let slack_event_actor = SlackEventActor {
         bot_token,
-        bot_id: "URS3HL8SD".to_string(), //TODO: remove hardcoded value
+        bot_id: BOT_ID.to_string(),
         slack_client: reqwest::Client::new(),
         redis_client: redis::Client::open(format!("redis://{}", *REDIS_ADDRESS)).unwrap(),
     }

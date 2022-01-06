@@ -42,7 +42,7 @@ impl Debug for NumericTimeStamp {
 pub enum TextObjectType {
     #[serde(rename = "plain_text")]
     PlainText,
-    #[serde(rename = "mkdwn")]
+    #[serde(rename = "mrkdwn")]
     Markdown,
 }
 

@@ -40,7 +40,7 @@ pub fn test_serde_enum() {
         TextObjectType::PlainText
     );
     assert_eq!(
-        serde_json::from_str::<TextObjectType>("\"mkdwn\"").unwrap(),
+        serde_json::from_str::<TextObjectType>("\"mrkdwn\"").unwrap(),
         TextObjectType::Markdown
     );
 
@@ -50,7 +50,7 @@ pub fn test_serde_enum() {
     );
     assert_eq!(
         serde_json::to_string(&TextObjectType::Markdown).unwrap(),
-        "\"mkdwn\""
+        "\"mrkdwn\""
     );
 }
 

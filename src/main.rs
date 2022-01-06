@@ -140,6 +140,7 @@ impl Handler<MessageEvent> for SlackEventActor {
 
     fn handle(&mut self, msg: MessageEvent, context: &mut Self::Context) -> Self::Result {
         if msg.user.contains(&self.bot_id) {
+            debug!("Bot id is in user");
             return Ok(());
         }
 

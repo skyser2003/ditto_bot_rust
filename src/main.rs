@@ -131,15 +131,15 @@ lazy_static! {
     pub static ref IS_TEST: bool = env::var("TEST")
         .map(|test_val| test_val == "1")
         .unwrap_or(false);
-    static ref REDIS_ADDRESS: String = env::var("REDIS_ADDRESS").unwrap_or_else(|_| "".to_string());
-    static ref BOT_ID: String = env::var("BOT_ID").unwrap_or_else(|_| "".to_string());
 }
 
 impl Handler<MessageEvent> for SlackEventActor {
     type Result = Result<(), Error>;
 
     fn handle(&mut self, msg: MessageEvent, context: &mut Self::Context) -> Self::Result {
-        if msg.user.contains(&self.bot_id) {
+        let bot_id = self.bot_id.to_string();
+
+        if msg.user.contains(&bot_id) {
             debug!("Bot id is in user: {:?}, {:?}", msg.user, self.bot_id);
             return Ok(());
         }
@@ -156,7 +156,7 @@ impl Handler<MessageEvent> for SlackEventActor {
         let base_request_builder = self.base_request_builder();
 
         context.spawn(wrap_future(async move {
-            modules::surplus::handle(&text, &user, &mut blocks, &mut conn, &*BOT_ID)
+            modules::surplus::handle(&text, &user, &mut blocks, &mut conn, &bot_id)
                 .await
                 .unwrap_or_else(|err| {
                     error!("Chat redis record fail: {}", err);
@@ -299,9 +299,11 @@ fn main() -> std::io::Result<()> {
         Err(_e) => panic!("Signing secret is not given."),
     };
 
-    let bot_id = &*BOT_ID;
+    let bot_id = env::var("BOT_ID").unwrap_or_else(|_| "".to_string());
+    let redis_address = env::var("REDIS_ADDRESS").unwrap_or_else(|_| "".to_string());
 
     info!("Slack bot id: {:?}", bot_id);
+    info!("Redis address: {:?}", redis_address);
 
     let system = System::new("slack");
 
@@ -309,7 +311,7 @@ fn main() -> std::io::Result<()> {
         bot_token,
         bot_id: bot_id.to_string(),
         slack_client: reqwest::Client::new(),
-        redis_client: redis::Client::open(format!("redis://{}", *REDIS_ADDRESS)).unwrap(),
+        redis_client: redis::Client::open(format!("redis://{}", redis_address)).unwrap(),
     }
     .start();
 

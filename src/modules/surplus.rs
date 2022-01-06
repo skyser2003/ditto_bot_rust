@@ -14,10 +14,12 @@ pub async fn handle<'a>(
     let slices = text.split_whitespace().collect::<Vec<&str>>();
     let slack_bot_format = format!("<@{}>", bot_id);
 
+    log::debug!("full_text: {:?}", text);
+
     if 2 <= slices.len() && slices[0] == slack_bot_format {
         let call_type = slices[1];
 
-        log::debug!("full_text: {:?}, call_type: {:?}", text, call_type);
+        log::debug!("call_type: {:?}", call_type);
 
         if call_type == "잉여" {
             let mut table = std::collections::HashMap::<String, i32>::new();

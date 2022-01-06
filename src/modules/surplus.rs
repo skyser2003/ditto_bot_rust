@@ -1,4 +1,5 @@
 use crate::slack;
+use std::cmp::{min, max};
 use log::debug;
 use redis::{Commands, Connection};
 use std::borrow::Cow;
@@ -66,10 +67,20 @@ pub async fn handle<'a>(
                 vec_table.truncate(5);
             }
 
+            let mut vec_bar = Vec::<String>::new();
+
+            for pair in vec_table {
+                let user_bar = format!("*{:}:\n\t*{:}", pair.0, generate_bar(pair.1, 2));
+
+                vec_bar.push(user_bar);
+            }
+
+            let graph_text = vec_bar.join("\n");
+
             blocks.push(slack::BlockElement::Section(slack::SectionBlock {
                 text: slack::TextObject {
-                    ty: slack::TextObjectType::PlainText,
-                    text: Cow::from("[You guys are all ingyeo.]"),
+                    ty: slack::TextObjectType::Markdown,
+                    text: Cow::from(graph_text),
                     emoji: None,
                     verbatim: None,
                 },
@@ -88,4 +99,20 @@ pub async fn handle<'a>(
     }
 
     Ok(())
+}
+
+fn generate_bar(chat_count: i32, level: usize) -> String {
+    let characters = ["", "▌", "█"];
+    let steps = max(min(level, characters.len() - 1), 1);
+
+    let n = ((chat_count / 1000) as f32).round() as i32;
+    let graph_char = characters[steps];
+
+    let length = n / steps as i32;
+
+    let mut graph_str = (0..length).map(|_| graph_char).collect::<String>();
+
+    graph_str.push_str(characters[(n % steps as i32) as usize]);
+
+    graph_str
 }

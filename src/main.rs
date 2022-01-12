@@ -2,7 +2,7 @@ use actix::prelude::*;
 use actix::{fut::wrap_future, System};
 use actix_web::http::StatusCode;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Result};
-use anyhow::Error;
+use anyhow::{anyhow, Context as _, Error};
 use futures::executor;
 use hmac::{Hmac, Mac};
 use lazy_static::lazy_static;
@@ -286,22 +286,17 @@ async fn normal_handler(
     }
 }
 
-fn main() -> std::io::Result<()> {
+fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let bot_token = match env::var("SLACK_BOT_TOKEN") {
-        Ok(val) => val,
-        Err(_e) => panic!("Bot token is not given."),
-    };
+    let bot_token = env::var("SLACK_BOT_TOKEN").context("Bot token is not given")?;
     info!("Bot token: {:?}", bot_token);
 
-    let signing_secret = match env::var("SLACK_SIGNING_SECRET") {
-        Ok(val) => val,
-        Err(_e) => panic!("Signing secret is not given."),
-    };
+    let signing_secret =
+        env::var("SLACK_SIGNING_SECRET").context("Signing secret is not given.")?;
 
     let bot_id = env::var("BOT_ID").unwrap_or_else(|_| "".to_string());
-    let redis_address = env::var("REDIS_ADDRESS").unwrap_or_else(|_| "".to_string());
+    let redis_address = env::var("REDIS_ADDRESS").context("Redis address is not given")?;
 
     info!("Slack bot id: {:?}", bot_id);
     info!("Redis address: {:?}", redis_address);
@@ -318,7 +313,12 @@ fn main() -> std::io::Result<()> {
 
     let (tx, rx) = std::sync::mpsc::channel();
 
-    let _ = std::thread::spawn(move || {
+    let use_ssl = env::var("USE_SSL")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(false);
+
+    let _ = std::thread::spawn(move || -> anyhow::Result<()> {
         let system = System::new("http");
 
         let mut http_srv = HttpServer::new(move || {
@@ -331,38 +331,41 @@ fn main() -> std::io::Result<()> {
                 .route("/", web::get().to(normal_handler))
         });
 
-        let use_ssl = match env::var("USE_SSL") {
-            Ok(val) => val.parse().unwrap_or(false),
-            Err(_e) => false,
-        };
-
         if use_ssl {
             info!("Trying to bind ssl.");
             let mut config = ServerConfig::new(NoClientAuth::new());
-            let cert_file = &mut BufReader::new(File::open("PUBLIC_KEY.pem").unwrap());
-            let key_file = &mut BufReader::new(File::open("PRIVATE_KEY.pem").unwrap());
-            let cert_chain = certs(cert_file).unwrap();
-            let mut keys = rsa_private_keys(key_file).unwrap();
+            let mut cert_file = BufReader::new(
+                File::open("PUBLIC_KEY.pem")
+                    .context("SSL enabled. but failed to open PUBLIC_KEY.pem")?,
+            );
+            let mut key_file = BufReader::new(
+                File::open("PRIVATE_KEY.pem")
+                    .context("SSL enabled. but failed to open PRIVATE_KEY.pem")?,
+            );
+            let cert_chain = certs(&mut cert_file).map_err(|_| anyhow!("Failed to parse certs"))?;
+            let mut keys = rsa_private_keys(&mut key_file)
+                .map_err(|_| anyhow!("Failed to parse private keys"))?;
 
             if keys.is_empty() {
                 panic!("Fails to load a private key file. Check it is formatted in RSA.")
             }
-            config.set_single_cert(cert_chain, keys.remove(0)).unwrap();
+            config.set_single_cert(cert_chain, keys.remove(0))?;
 
-            http_srv = http_srv.bind_rustls("0.0.0.0:14475", config).unwrap();
+            http_srv = http_srv.bind_rustls("0.0.0.0:14475", config)?;
         } else {
             info!("Trying to bind http.");
 
-            http_srv = http_srv.bind("0.0.0.0:8082").unwrap();
+            http_srv = http_srv.bind("0.0.0.0:8082")?;
         }
-
         let srv = http_srv.run();
 
         let _ = tx.send(srv);
 
         info!("Server run start!");
 
-        system.run()
+        system.run()?;
+
+        Ok(())
     });
 
     let srv = rx.recv().unwrap();
@@ -382,7 +385,9 @@ fn main() -> std::io::Result<()> {
     })
     .expect("Fail to set Ctrl-C handler.");
 
-    system.run()
+    system.run()?;
+
+    Ok(())
 }
 
 // curl 'https://slack.com/api/chat.postMessage' -H 'Authorization: Bearer SECRET' -H 'Content-type: application/json; charset=utf-8' -d '{"channel": "CS2AVF83X", "text": "hello, world"}'

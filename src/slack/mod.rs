@@ -4,7 +4,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, PartialEq, Eq)]
 pub struct StrTimeStamp<'a>(&'a str);

@@ -27,7 +27,7 @@ pub fn test_deserialize_unicode_basic_message() {
     )
     .unwrap();
     if let Message::BasicMessage(msg) = deserialized {
-        assert_eq!(msg.common.text.as_ref(), "그아아");
+        assert_eq!(&msg.common.text, "그아아");
     } else {
         panic!("deserialized one must be a BasicMessage!");
     }

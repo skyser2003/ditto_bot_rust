@@ -49,21 +49,27 @@ lazy_static! {
     ];
 }
 
-pub fn handle(text: &String, blocks: &mut Vec<slack::BlockElement>) {
+pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     // TODO: Remove hard coded value
     if thread_rng().gen_range(0, 100) < 35 {
         for data in &*MHW_DATA {
             for keyword in &data.keywords {
-                if text.contains(keyword) {
-                    blocks.push(slack::BlockElement::Image(slack::ImageBlock {
-                        ty: "image",
-                        image_url: data.image_url,
-                        alt_text: data.text,
-                        title: None,
-                        block_id: None,
-                    }));
+                if msg.text.contains(keyword) {
+                    bot.send_message(
+                        &msg.channel,
+                        &[slack::BlockElement::Image(slack::ImageBlock {
+                            ty: "image".to_string(),
+                            image_url: data.image_url.to_string(),
+                            alt_text: data.text.to_string(),
+                            title: None,
+                            block_id: None,
+                        })],
+                    )
+                    .await?;
                 }
             }
         }
     }
+
+    Ok(())
 }

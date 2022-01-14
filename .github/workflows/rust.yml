@@ -54,4 +54,5 @@ jobs:
       run: docker/build.sh
 
     - name: Publish
+      if: ${{ github.event_name == 'push' }}
       run: curl -X POST ${{secrets.PORTAINER_WEBHOOK}}

@@ -69,3 +69,17 @@ pub fn test_deserialize_bot_message() {
     )
     .unwrap();
 }
+
+#[test]
+pub fn test_deserialize_normal_message() {
+    serde_json::from_str::<Message>(
+        r#"{
+        "type": "message",
+        "ts": "1358877455.000010",
+        "channel": "aaaa",
+        "text": "Pushing is the answer",
+        "user": "github"
+    }"#,
+    )
+    .unwrap();
+}

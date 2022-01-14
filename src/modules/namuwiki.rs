@@ -1,11 +1,10 @@
 use crate::slack;
-use lazy_static::lazy_static;
+
+use once_cell::sync::OnceCell;
 use regex::Regex;
 use reqwest::Url;
 
-lazy_static! {
-    static ref TITLE_REGEX: Regex = Regex::new(r"<title>(.+) - 나무위키</title>").unwrap();
-}
+const TITLE_REGEX: OnceCell<Regex> = OnceCell::new();
 
 pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     if let Some(link) = &msg.link {
@@ -24,6 +23,7 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
             let body = res.text().await?;
 
             let title_opt = TITLE_REGEX
+                .get_or_try_init(|| Regex::new(r"<title>(.+) - 나무위키</title>"))?
                 .captures(&body)
                 .and_then(|captures| captures.get(1).map(|match_title| match_title.as_str()));
 

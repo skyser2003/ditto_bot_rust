@@ -27,7 +27,7 @@ pub fn test_deserialize_unicode_basic_message() {
     )
     .unwrap();
     if let Message::BasicMessage(msg) = deserialized {
-        assert_eq!(msg.common.text.as_ref(), "그아아");
+        assert_eq!(&msg.common.text, "그아아");
     } else {
         panic!("deserialized one must be a BasicMessage!");
     }
@@ -65,6 +65,20 @@ pub fn test_deserialize_bot_message() {
         "bot_id": "BB12033",
         "username": "github",
         "icons": {}
+    }"#,
+    )
+    .unwrap();
+}
+
+#[test]
+pub fn test_deserialize_normal_message() {
+    serde_json::from_str::<Message>(
+        r#"{
+        "type": "message",
+        "ts": "1358877455.000010",
+        "channel": "aaaa",
+        "text": "Pushing is the answer",
+        "user": "github"
     }"#,
     )
     .unwrap();

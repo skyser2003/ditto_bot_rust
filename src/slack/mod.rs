@@ -198,97 +198,19 @@ pub struct LinkSharedMessage {
     pub event_ts: String,
 }
 
-#[derive(Debug)]
-// tag: subtype
-pub enum Message {
+#[derive(Debug, Deserialize)]
+#[serde(tag = "subtype")]
+#[serde(rename_all = "snake_case")]
+pub enum TaggedMessage {
     BotMessage(BotMessage),
     ChannelJoin(ChannelJoinMessage),
-    BasicMessage(BasicMessage),
 }
 
-impl<'de> serde::Deserialize<'de> for Message {
-    fn deserialize<D>(deserializer: D) -> Result<Message, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::private::de::Content;
-        use std::fmt;
-        struct FieldVisitor;
-        struct TaggedContent<'de> {
-            pub tag: String,
-            pub content: Content<'de>,
-        }
-        impl<'de> ::serde::de::Visitor<'de> for FieldVisitor {
-            type Value = TaggedContent<'de>;
-            fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                fmt.write_str("subtyped or non-subtyped message")
-            }
-
-            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
-            where
-                M: serde::de::MapAccess<'de>,
-            {
-                let mut tag = None;
-                let mut vec = Vec::with_capacity(30);
-                while let Some(kv) = map.next_entry::<&'de str, Content<'de>>()? {
-                    match kv {
-                        ("subtype", v) => {
-                            if tag.is_some() {
-                                return Err(serde::de::Error::duplicate_field("subtype"));
-                            }
-                            tag = Some(match v.as_str() {
-                                Some(subtype) => subtype.to_string(),
-                                None => return Err(serde::de::Error::missing_field("subtype")),
-                            });
-                        }
-                        (k, v) => {
-                            vec.push((Content::Str(k), v));
-                        }
-                    }
-                }
-                Ok(TaggedContent {
-                    tag: tag.unwrap_or_else(|| "".to_string()),
-                    content: Content::Map(vec),
-                })
-            }
-        }
-        impl<'de> ::serde::Deserialize<'de> for TaggedContent<'de> {
-            #[inline]
-            fn deserialize<__D>(d: __D) -> ::serde::export::Result<Self, __D::Error>
-            where
-                __D: ::serde::Deserializer<'de>,
-            {
-                ::serde::Deserializer::deserialize_identifier(d, FieldVisitor)
-            }
-        }
-        let tagged = match ::serde::Deserializer::deserialize_any(deserializer, FieldVisitor) {
-            ::serde::export::Ok(val) => val,
-            ::serde::export::Err(e) => {
-                return ::serde::export::Err(e);
-            }
-        };
-
-        macro_rules! deserialize_subtype {
-            ($($field:expr => $e_type:ty as $v_type:path,)*) => {
-                match tagged.tag.as_str() {
-                    $($field => ::serde::export::Result::map(
-                        <$e_type as ::serde::Deserialize>::deserialize(
-                            ::serde::private::de::ContentDeserializer::<D::Error>::new(
-                                tagged.content,
-                            ),
-                        ),
-                        $v_type,
-                    ),)*
-                    _ => Err(serde::de::Error::unknown_variant(&tagged.tag, &[$($field),*]))
-                }
-            }
-        }
-        deserialize_subtype! {
-            "bot_message" => BotMessage as Message::BotMessage,
-            "channel_join" => ChannelJoinMessage as Message::ChannelJoin,
-            "" => BasicMessage as Message::BasicMessage,
-        }
-    }
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum Message {
+    TaggedMessage(TaggedMessage),
+    BasicMessage(BasicMessage),
 }
 
 #[derive(Debug, Deserialize)]

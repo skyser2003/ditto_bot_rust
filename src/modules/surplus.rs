@@ -1,23 +1,17 @@
 use crate::slack;
 use log::debug;
-use redis::{Commands, Connection};
+use redis::Commands;
 use serde_json::Value;
-use std::borrow::Cow;
 use std::cmp::{max, min};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn handle<'a>(
-    text: &String,
-    user: &String,
-    blocks: &mut Vec<slack::BlockElement<'a>>,
-    conn: &mut Connection,
-    bot_id: &String,
-    bot_token: &String,
-) -> redis::RedisResult<()> {
-    let slices = text.split_whitespace().collect::<Vec<&str>>();
-    let slack_bot_format = format!("<@{}>", bot_id);
+pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
+    let slices = msg.text.split_whitespace().collect::<Vec<&str>>();
+    let slack_bot_format = format!("<@{}>", bot.bot_id());
 
-    log::debug!("full_text: {:?}", text);
+    log::debug!("full_text: {:?}", &msg.text);
+
+    let mut conn = bot.redis();
 
     if 2 <= slices.len() && slices[0] == slack_bot_format {
         let call_type = slices[1];
@@ -25,23 +19,28 @@ pub async fn handle<'a>(
         log::debug!("call_type: {:?}", call_type);
 
         if call_type == "잉여" {
+            let mut blocks = Vec::new();
             let mut table = std::collections::HashMap::<String, i32>::new();
 
             let records: Vec<String> = conn.zrangebyscore("ditto-archive", "-inf", "+inf").unwrap();
 
             if records.len() == 0 {
-                blocks.push(slack::BlockElement::Section(slack::SectionBlock {
-                    text: slack::TextObject {
-                        ty: slack::TextObjectType::PlainText,
-                        text: Cow::from("[There is no chat record.]"),
-                        emoji: None,
-                        verbatim: None,
-                    },
-                    block_id: None,
-                    fields: None,
-                }));
-
-                return Ok(());
+                return bot
+                    .send_message(
+                        &msg.channel,
+                        &[slack::BlockElement::Section(slack::SectionBlock {
+                            text: slack::TextObject {
+                                ty: slack::TextObjectType::PlainText,
+                                text: "[There is no chat record.]".to_string(),
+                                emoji: None,
+                                verbatim: None,
+                            },
+                            block_id: None,
+                            fields: None,
+                        })],
+                    )
+                    .await
+                    .and(Ok(()));
             }
 
             for record in records {
@@ -69,7 +68,7 @@ pub async fn handle<'a>(
                 vec_table.truncate(5);
             }
 
-            let users_list = get_users_list(bot_token);
+            let users_list = get_users_list(bot.bot_token());
 
             let mut vec_bar = Vec::<String>::new();
 
@@ -84,7 +83,7 @@ pub async fn handle<'a>(
             blocks.push(slack::BlockElement::Section(slack::SectionBlock {
                 text: slack::TextObject {
                     ty: slack::TextObjectType::Markdown,
-                    text: Cow::from(graph_text),
+                    text: graph_text,
                     emoji: None,
                     verbatim: None,
                 },
@@ -97,7 +96,7 @@ pub async fn handle<'a>(
     } else {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let score = now.as_millis();
-        let member = format!("{}:{}", score, user);
+        let member = format!("{}:{}", score, &msg.user);
 
         conn.zadd("ditto-archive", member, score as i64)?;
     }
@@ -121,7 +120,7 @@ fn generate_bar(chat_count: i32, level: usize) -> String {
     graph_str
 }
 
-async fn get_users_list(bot_token: &String) -> anyhow::Result<String> {
+async fn get_users_list(bot_token: &str) -> anyhow::Result<String> {
     let link = "https://slack.com/api/users.list";
 
     let client = reqwest::Client::builder()

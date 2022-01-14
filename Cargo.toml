@@ -13,6 +13,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 async-trait = "0.1"
 bytes = "*"
+once_cell = "1"
 
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
 tokio = { version = "1", features = ["full"] }
@@ -29,7 +30,6 @@ hmac = "0.12"
 sha2 = "0.10"
 
 futures = "0.3"
-lazy_static = "1.4.0"
 rand = "0.8"
 redis = "0.21"
 

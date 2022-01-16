@@ -10,7 +10,7 @@ WORKDIR /project
 COPY . .
 
 RUN cargo update
-RUN cargo build --release --target=aarch64-unknown-linux-gnu
+RUN cargo build --release --target=aarch64-unknown-linux-gnu --features=check-req
 
 FROM --platform=linux/arm64 rust
 WORKDIR /project

@@ -165,96 +165,7 @@ enum Error {
     EventParsingError,
 }
 
-#[cfg(feature = "check-req")]
-mod auth {
-    use axum::{
-        body::{boxed, Body, BoxBody},
-        http::{Request, Response, StatusCode},
-    };
-    use futures::future::BoxFuture;
-    use hmac::Mac;
-    use log::debug;
-
-    struct ByteBuf<'a>(&'a [u8]);
-
-    impl<'a> std::fmt::LowerHex for ByteBuf<'a> {
-        fn fmt(&self, fmtr: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-            for byte in self.0 {
-                fmtr.write_fmt(format_args!("{:02x}", byte))?;
-            }
-            Ok(())
-        }
-    }
-
-    #[derive(Debug, Clone)]
-
-    pub struct SlackAuthorization(pub Vec<u8>);
-
-    async fn authorize<B: axum::body::HttpBody + Unpin + Send + Sync + 'static>(
-        secret: &[u8],
-        mut request: Request<B>,
-    ) -> Result<Request<B>, Response<BoxBody>> {
-        let data = request.body().data();
-
-        fn empty_response(status_code: StatusCode) -> axum::http::Response<BoxBody> {
-            axum::http::Response::builder()
-                .status(status_code)
-                .body(boxed(Body::empty()))
-                .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() })
-        }
-        let headers = request.headers();
-        let (signature, timestamp) =
-            if let (Some(s), Some(t)) = (headers.get("X-Slack-Signature"), headers.get("X-")) {
-                (s, t)
-            } else {
-                return Err(empty_response(StatusCode::BAD_REQUEST));
-            };
-        let signature = signature.as_bytes();
-        let timestamp = timestamp
-            .to_str()
-            .map_err(|_| empty_response(StatusCode::BAD_REQUEST))?;
-
-        {
-            let cur_timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .checked_sub(std::time::Duration::from_secs(
-                    timestamp.parse::<u64>().unwrap(),
-                ));
-
-            debug!("now: {:?}", cur_timestamp.unwrap());
-            //TODO: check replay attack
-        }
-
-        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(secret)
-            .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() });
-        mac.update("v0:".as_bytes());
-        mac.update(timestamp.as_bytes());
-        mac.update(data.await?);
-
-        let calculated_signature = format!("v0={:02x}", ByteBuf(&mac.finalize().into_bytes()));
-
-        if signature != calculated_signature.as_bytes() {
-            return Err(empty_response(StatusCode::UNAUTHORIZED));
-        }
-
-        debug!("Success to verify a slack's signature.");
-
-        Ok(request)
-    }
-
-    impl<B: axum::body::HttpBody + Unpin + Send + Sync + 'static>
-        tower_http::auth::AsyncAuthorizeRequest<B> for SlackAuthorization
-    {
-        type RequestBody = B;
-        type ResponseBody = BoxBody;
-        type Future = BoxFuture<'static, Result<Request<B>, Response<Self::ResponseBody>>>;
-
-        fn authorize(&mut self, mut request: Request<B>) -> Self::Future {
-            Box::pin(authorize(&self.0, request))
-        }
-    }
-}
+mod auth;
 
 enum HttpResponse {
     Challenge(String),
@@ -323,24 +234,23 @@ async fn main() -> anyhow::Result<()> {
     info!("Slack bot id: {:?}", bot_id);
     info!("Redis address: {:?}", redis_address);
 
-    let app = axum::Router::new()
-        .route(
-            "/",
-            axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
-        )
-        .layer(AddExtensionLayer::new(Arc::new(DittoBot {
-            bot_id,
-            bot_token,
-            http_client: reqwest::Client::new(),
-            redis_client: redis::Client::open(format!("redis://{}", redis_address))
-                .context("Failed to create redis client")?,
-        })));
+    let app = axum::Router::new().route(
+        "/",
+        axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
+    );
+    let app = app.layer(AddExtensionLayer::new(Arc::new(DittoBot {
+        bot_id,
+        bot_token,
+        http_client: reqwest::Client::new(),
+        redis_client: redis::Client::open(format!("redis://{}", redis_address))
+            .context("Failed to create redis client")?,
+    })));
     #[cfg(feature = "check-req")]
-    let app = app.layer(tower_http::auth::RequireAuthorizationLayer::custom({
+    let app = app.layer(tower_http::auth::AsyncRequireAuthorizationLayer::new({
         let signing_secret = env::var("SLACK_SIGNING_SECRET")
             .context("Signing secret is not given.")?
             .into_bytes();
-        auth::SlackAuthorization(signing_secret)
+        auth::SlackAuthorization::new(signing_secret)
     }));
 
     // let use_ssl = env::var("USE_SSL")

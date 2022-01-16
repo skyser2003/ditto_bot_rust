@@ -1,19 +1,55 @@
-FROM rust
+FROM rust:1.57-alpine AS builder
 
-RUN apt-get update
-RUN apt-get install -y gcc-aarch64-linux-gnu
+WORKDIR /ws
 
-RUN rustup toolchain install stable-aarch64-unknown-linux-gnu
-RUN rustup target add aarch64-unknown-linux-gnu
+RUN apk add --no-cache \
+    musl-dev \
+    curl \
+    ca-certificates \
+    openssl-dev
 
-WORKDIR /project
-COPY . .
+ARG TARGETARCH
+ARG BUILDARCH
 
-RUN cargo update
-RUN cargo build --release --target=aarch64-unknown-linux-gnu --features=check-req
+# env substitution not working
+# Use workaround
+RUN if [ "${TARGETARCH}" = "arm64" ]; then \
+  echo -n "aarch64" > TARGETARCH; \
+else \
+  echo -n ${TARGETARCH} > TARGETARCH; \
+fi; \
+if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then \
+  echo -n "native" > BUILD_MODE; \
+else \
+  echo -n "cross" > BUILD_MODE; \
+fi;
 
-FROM --platform=linux/arm64 rust
-WORKDIR /project
-COPY --from=0 /project/target/aarch64-unknown-linux-gnu/release/ditto-bot-rust .
+# install musl target
+RUN rustup target add $(cat TARGETARCH)-unknown-linux-musl
+# install musl compiler
+RUN curl https://musl.cc/$(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz -o $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
+    tar -xzf $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
+    rm $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
+    mv $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE) /gcc-musl
+ENV PATH=${PATH}:/gcc-musl/bin
 
-CMD ./ditto-bot-rust
+RUN mkdir .cargo && \
+  echo -e "[target.$(cat TARGETARCH)-unknown-linux-musl]\n\
+linker = \"$(cat TARGETARCH)-linux-musl-gcc\"\n\
+ar = \"$(cat TARGETARCH)-linux-musl-ar\"\n\
+rustflags = [\"-Ctarget-feature=+crt-static\"]" > .cargo/config
+
+# begin build
+ADD Cargo.toml ./
+ADD src/ ./src
+
+ENV PKG_CONFIG_ALL_STATIC=1
+RUN cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl && \
+  mv target/$(cat TARGETARCH)-unknown-linux-musl/release/ditto-bot-rust /ditto-bot-rust
+
+FROM scratch
+
+COPY --from=builder /ditto-bot-rust /
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+ENTRYPOINT ["ditto-bot-rust"]

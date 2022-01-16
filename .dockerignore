@@ -1,5 +1,7 @@
 .github/
 .vscode/
 target/
+images/
+ssl_windows/
 .editorconfig
 .gitignore

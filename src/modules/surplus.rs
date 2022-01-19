@@ -8,90 +8,41 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
-    let slices = msg.text.split_whitespace().collect::<Vec<&str>>();
     let slack_bot_format = format!("<@{}>", bot.bot_id());
+    let is_bot_command = msg.text.contains(&slack_bot_format);
 
-    log::debug!("full_text: {:?}", &msg.text);
+    if is_bot_command == false {
+        return Ok(());
+    }
+
+    log::debug!("Bot command full_text: {:?}", &msg.text);
+
+    let command_str = msg.text.replace(&slack_bot_format, "");
+
+    let slices = command_str.split_whitespace().collect::<Vec<&str>>();
+
+    if slices.len() == 0 {
+        return Ok(());
+    }
 
     let mut conn = bot.redis();
 
-    if 2 <= slices.len() && slices[0] == slack_bot_format {
-        let call_type = slices[1];
+    let call_type = slices[0];
+    log::debug!("call_type: {:?}", call_type);
 
-        log::debug!("call_type: {:?}", call_type);
+    if call_type == "잉여" {
+        let mut table = std::collections::HashMap::<String, i32>::new();
 
-        if call_type == "잉여" {
-            let mut table = std::collections::HashMap::<String, i32>::new();
+        let records: Vec<String> = conn.zrange("ditto-archive", 0, -1).unwrap();
 
-            let records: Vec<String> = conn.zrange("ditto-archive", 0, -1).unwrap();
-
-            if records.len() == 0 {
-                return bot
-                    .send_message(
-                        &msg.channel,
-                        &[slack::BlockElement::Section(slack::SectionBlock {
-                            text: slack::TextObject {
-                                ty: slack::TextObjectType::PlainText,
-                                text: "[There is no chat record.]".to_string(),
-                                emoji: None,
-                                verbatim: None,
-                            },
-                            block_id: None,
-                            fields: None,
-                        })],
-                    )
-                    .await
-                    .and(Ok(()));
-            }
-
-            for record in records {
-                let user_id = record.split(":").nth(1).unwrap().to_string();
-
-                let prev_count = table.get(&user_id);
-                let next_count = match prev_count {
-                    Some(val) => val + 1,
-                    None => 1,
-                };
-
-                table.insert(user_id, next_count);
-            }
-
-            let mut vec_table = Vec::<(&String, i32)>::new();
-
-            for pair in table.iter_mut() {
-                vec_table.push((pair.0, *pair.1));
-            }
-
-            vec_table.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-            if slices.len() <= 2 || slices[2] != "all" {
-                // Top 5 user's chat count only
-                vec_table.truncate(5);
-            }
-
-            let user_name_map =
-                get_users_list(bot.bot_token())
-                    .await
-                    .unwrap_or(HashMap::<String, String>::new());
-
-            let mut vec_bar = Vec::<String>::new();
-
-            for pair in vec_table {
-                let user_name = user_name_map.get(pair.0).unwrap_or(pair.0);
-                let user_bar = format!("*{:}:*\n\t{:}", user_name, generate_bar(pair.1, 2));
-
-                vec_bar.push(user_bar);
-            }
-
-            let graph_text = vec_bar.join("\n");
-
+        if records.len() == 0 {
             return bot
                 .send_message(
                     &msg.channel,
                     &[slack::BlockElement::Section(slack::SectionBlock {
                         text: slack::TextObject {
-                            ty: slack::TextObjectType::Markdown,
-                            text: graph_text,
+                            ty: slack::TextObjectType::PlainText,
+                            text: "[There is no chat record.]".to_string(),
                             emoji: None,
                             verbatim: None,
                         },
@@ -102,6 +53,63 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                 .await
                 .and(Ok(()));
         }
+
+        for record in records {
+            let user_id = record.split(":").nth(1).unwrap().to_string();
+
+            let prev_count = table.get(&user_id);
+            let next_count = match prev_count {
+                Some(val) => val + 1,
+                None => 1,
+            };
+
+            table.insert(user_id, next_count);
+        }
+
+        let mut vec_table = Vec::<(&String, i32)>::new();
+
+        for pair in table.iter_mut() {
+            vec_table.push((pair.0, *pair.1));
+        }
+
+        vec_table.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        if slices.len() <= 1 || slices[1] != "all" {
+            // Top 5 user's chat count only
+            vec_table.truncate(5);
+        }
+
+        let user_name_map = get_users_list(bot.bot_token())
+            .await
+            .unwrap_or(HashMap::<String, String>::new());
+
+        let mut vec_bar = Vec::<String>::new();
+
+        for pair in vec_table {
+            let user_name = user_name_map.get(pair.0).unwrap_or(pair.0);
+            let user_bar = format!("*{:}:*\n\t{:}", user_name, generate_bar(pair.1, 2));
+
+            vec_bar.push(user_bar);
+        }
+
+        let graph_text = vec_bar.join("\n");
+
+        return bot
+            .send_message(
+                &msg.channel,
+                &[slack::BlockElement::Section(slack::SectionBlock {
+                    text: slack::TextObject {
+                        ty: slack::TextObjectType::Markdown,
+                        text: graph_text,
+                        emoji: None,
+                        verbatim: None,
+                    },
+                    block_id: None,
+                    fields: None,
+                })],
+            )
+            .await
+            .and(Ok(()));
     } else {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let score = now.as_millis();

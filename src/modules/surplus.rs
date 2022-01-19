@@ -1,8 +1,6 @@
 use crate::slack;
-use log::debug;
 use redis::Commands;
-use serde_json::Value;
-use slack::{Member, UsersList};
+use slack::UsersList;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};

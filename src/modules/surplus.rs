@@ -2,7 +2,9 @@ use crate::slack;
 use log::debug;
 use redis::Commands;
 use serde_json::Value;
+use slack::{Member, UsersList};
 use std::cmp::{max, min};
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
@@ -55,10 +57,10 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                 table.insert(user_id, next_count);
             }
 
-            let mut vec_table = Vec::<(String, i32)>::new();
+            let mut vec_table = Vec::<(&String, i32)>::new();
 
             for pair in table.iter_mut() {
-                vec_table.push((pair.0.to_string(), *pair.1));
+                vec_table.push((pair.0, *pair.1));
             }
 
             vec_table.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
@@ -68,12 +70,16 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                 vec_table.truncate(5);
             }
 
-            let users_list = get_users_list(bot.bot_token());
+            let user_name_map =
+                get_users_list(bot.bot_token())
+                    .await
+                    .unwrap_or(HashMap::<String, String>::new());
 
             let mut vec_bar = Vec::<String>::new();
 
             for pair in vec_table {
-                let user_bar = format!("*{:}:\n\t*{:}", pair.0, generate_bar(pair.1, 2));
+                let user_name = user_name_map.get(pair.0).unwrap_or(pair.0);
+                let user_bar = format!("*{:}:\n\t*{:}", user_name, generate_bar(pair.1, 2));
 
                 vec_bar.push(user_bar);
             }
@@ -120,7 +126,7 @@ fn generate_bar(chat_count: i32, level: usize) -> String {
     graph_str
 }
 
-async fn get_users_list(bot_token: &str) -> anyhow::Result<String> {
+async fn get_users_list(bot_token: &str) -> anyhow::Result<HashMap<String, String>> {
     let link = "https://slack.com/api/users.list";
 
     let client = reqwest::Client::builder()
@@ -136,10 +142,14 @@ async fn get_users_list(bot_token: &str) -> anyhow::Result<String> {
 
     let body = res.text().await?;
 
-    let parsed: Value = serde_json::from_str(&body)?;
+    let users_list = serde_json::from_str::<UsersList>(&body)?;
+    let members = users_list.members;
 
-    // TODO: use serde_json to get user id and name
-    let members = &parsed["users"]["members"];
+    let mut name_map = HashMap::<String, String>::new();
 
-    Ok(body)
+    for member in members {
+        name_map.insert(member.id, member.name);
+    }
+
+    Ok(name_map)
 }

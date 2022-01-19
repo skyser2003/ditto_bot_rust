@@ -21,7 +21,6 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         log::debug!("call_type: {:?}", call_type);
 
         if call_type == "잉여" {
-            let mut blocks = Vec::new();
             let mut table = std::collections::HashMap::<String, i32>::new();
 
             let records: Vec<String> = conn.zrangebyscore("ditto-archive", "-inf", "+inf").unwrap();
@@ -86,18 +85,22 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
             let graph_text = vec_bar.join("\n");
 
-            blocks.push(slack::BlockElement::Section(slack::SectionBlock {
-                text: slack::TextObject {
-                    ty: slack::TextObjectType::Markdown,
-                    text: graph_text,
-                    emoji: None,
-                    verbatim: None,
-                },
-                block_id: None,
-                fields: None,
-            }));
-
-            debug!("Blocks: {:?}", blocks);
+            return bot
+                .send_message(
+                    &msg.channel,
+                    &[slack::BlockElement::Section(slack::SectionBlock {
+                        text: slack::TextObject {
+                            ty: slack::TextObjectType::Markdown,
+                            text: graph_text,
+                            emoji: None,
+                            verbatim: None,
+                        },
+                        block_id: None,
+                        fields: None,
+                    })],
+                )
+                .await
+                .and(Ok(()));
         }
     } else {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();

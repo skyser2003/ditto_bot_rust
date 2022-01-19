@@ -23,7 +23,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         if call_type == "잉여" {
             let mut table = std::collections::HashMap::<String, i32>::new();
 
-            let records: Vec<String> = conn.zrangebyscore("ditto-archive", "-inf", "+inf").unwrap();
+            let records: Vec<String> = conn.zrange("ditto-archive", 0, -1).unwrap();
 
             if records.len() == 0 {
                 return bot

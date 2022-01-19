@@ -233,6 +233,17 @@ pub struct EventCallback {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct UsersList {
+    pub members: Vec<Member>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Member {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum SlackEvent {

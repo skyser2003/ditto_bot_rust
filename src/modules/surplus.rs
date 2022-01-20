@@ -171,12 +171,7 @@ async fn get_users_list(bot_token: &str) -> anyhow::Result<HashMap<String, Strin
 
     Ok(name_map)
 }
-
-pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
-    if cfg!(feature = "redis") {
-        #[cfg(feature = "redis")]
-        return handle_surplus(bot, msg);
-    }
-
+#[cfg(not(feature = "redis"))]
+pub async fn handle<'a, B: crate::Bot>(_: &B, _: &crate::MessageEvent) -> anyhow::Result<()> {
     return Ok(())
 }

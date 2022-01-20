@@ -39,13 +39,15 @@ jobs:
         ./bin/ec-$OS-$ARCH
 
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --verbose --all-features
 
     - name: Check clippy
-      run: cargo clippy
+      run: cargo clippy --all-features
 
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    needs: test_and_check
+    if: github.ref == 'refs/heads/master'
 
     steps:
     - uses: actions/checkout@v2

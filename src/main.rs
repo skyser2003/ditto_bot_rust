@@ -114,7 +114,6 @@ impl Bot for DittoBot {
         Ok(())
     }
 
-
     #[cfg(feature = "surplus")]
     fn redis(&self) -> redis::Connection {
         self.redis_client

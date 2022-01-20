@@ -149,7 +149,8 @@ impl DittoBot {
             (self, msg) => [
                 modules::surplus::handle,
                 modules::mhw::handle,
-                modules::namuwiki::handle
+                modules::namuwiki::handle,
+                modules::ph::handle
             ]
         );
 

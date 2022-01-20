@@ -85,7 +85,12 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
         for pair in vec_table {
             let user_name = user_name_map.get(pair.0).unwrap_or(pair.0);
-            let user_bar = format!("*{:}:*\n\t{:} {:}", user_name, generate_bar(pair.1, 2), pair.1);
+            let user_bar = format!(
+                "*{:}:*\n\t{:} {:}",
+                user_name,
+                generate_bar(pair.1, 2),
+                pair.1
+            );
 
             vec_bar.push(user_bar);
         }

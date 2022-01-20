@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 
-#[cfg(feature = "redis")]
+#[cfg(feature = "surplus")]
 pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     let slack_bot_format = format!("<@{}>", bot.bot_id());
     let is_bot_command = msg.text.contains(&slack_bot_format);
@@ -126,7 +126,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     Ok(())
 }
 
-#[cfg(feature = "redis")]
+#[cfg(feature = "surplus")]
 fn generate_bar(chat_count: i32, level: usize) -> String {
     let characters = ["", "▌", "█"];
     let steps = max(min(level, characters.len() - 1), 1);
@@ -143,7 +143,7 @@ fn generate_bar(chat_count: i32, level: usize) -> String {
     graph_str
 }
 
-#[cfg(feature = "redis")]
+#[cfg(feature = "surplus")]
 async fn get_users_list(bot_token: &str) -> anyhow::Result<HashMap<String, String>> {
     let link = "https://slack.com/api/users.list";
 
@@ -171,7 +171,7 @@ async fn get_users_list(bot_token: &str) -> anyhow::Result<HashMap<String, Strin
 
     Ok(name_map)
 }
-#[cfg(not(feature = "redis"))]
+#[cfg(not(feature = "surplus"))]
 pub async fn handle<'a, B: crate::Bot>(_: &B, _: &crate::MessageEvent) -> anyhow::Result<()> {
     return Ok(())
 }

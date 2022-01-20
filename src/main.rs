@@ -62,7 +62,7 @@ pub trait Bot {
         blocks: &[slack::BlockElement],
     ) -> anyhow::Result<()>;
 
-    #[cfg(feature = "redis")]
+    #[cfg(feature = "surplus")]
     fn redis(&self) -> redis::Connection;
 }
 
@@ -71,7 +71,7 @@ struct DittoBot {
     bot_token: String,
     http_client: reqwest::Client,
 
-    #[cfg(feature = "redis")]
+    #[cfg(feature = "surplus")]
     redis_client: redis::Client,
 }
 
@@ -115,7 +115,7 @@ impl Bot for DittoBot {
     }
 
 
-    #[cfg(feature = "redis")]
+    #[cfg(feature = "surplus")]
     fn redis(&self) -> redis::Connection {
         self.redis_client
             .get_connection()
@@ -317,7 +317,7 @@ async fn main() -> anyhow::Result<()> {
             bot_id,
             bot_token,
             http_client: reqwest::Client::new(),
-            #[cfg(feature = "redis")]
+            #[cfg(feature = "surplus")]
             redis_client: redis::Client::open(format!("redis://{}", redis_address))
                 .context("Failed to create redis client")?,
         })));

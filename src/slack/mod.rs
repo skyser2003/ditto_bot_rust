@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, PartialEq, Eq)]
 pub struct StrTimeStamp(String);
 
-impl Into<SystemTime> for &StrTimeStamp {
-    fn into(self) -> SystemTime {
-        SystemTime::UNIX_EPOCH + Duration::from_secs_f32(self.0.parse().unwrap())
+impl From<&StrTimeStamp> for SystemTime {
+    fn from(val: &StrTimeStamp) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs_f32(val.0.parse().unwrap())
     }
 }
 
@@ -24,9 +24,9 @@ impl Debug for StrTimeStamp {
 #[derive(Deserialize, Serialize, PartialEq, Eq)]
 pub struct NumericTimeStamp(u64);
 
-impl Into<SystemTime> for &NumericTimeStamp {
-    fn into(self) -> SystemTime {
-        SystemTime::UNIX_EPOCH + Duration::from_secs(self.0)
+impl From<&NumericTimeStamp> for SystemTime {
+    fn from(val: &NumericTimeStamp) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(val.0)
     }
 }
 
@@ -261,7 +261,7 @@ pub enum SlackEvent {
     /// HTTP 200 OK
     /// Content-type: application/x-www-form-urlencoded
     /// challenge=SOME_VALUE
-    EventCallback(EventCallback),
+    EventCallback(Box<EventCallback>),
     UrlVerification {
         token: String,
         challenge: String,

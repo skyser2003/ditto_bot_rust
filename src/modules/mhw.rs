@@ -13,7 +13,7 @@ macro_rules! url_prefix {
     };
 }
 
-const MHW_DATA: &'static [MonsterHunterData<'static>] = &[
+const MHW_DATA: &[MonsterHunterData<'static>] = &[
     MonsterHunterData {
         keywords: &["ㄷㄷ", "ㄷㄷ가마루", "도도가마루"],
         text: "도도가마루",

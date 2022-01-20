@@ -16,6 +16,8 @@ use std::{
 
 mod modules;
 mod slack;
+#[cfg(test)]
+pub mod test;
 
 pub struct MessageEvent {
     user: String,

@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StrTimeStamp(String);
 
 impl From<&StrTimeStamp> for SystemTime {
@@ -21,7 +21,7 @@ impl Debug for StrTimeStamp {
     }
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct NumericTimeStamp(u64);
 
 impl From<&NumericTimeStamp> for SystemTime {
@@ -37,7 +37,7 @@ impl Debug for NumericTimeStamp {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub enum TextObjectType {
     #[serde(rename = "plain_text")]
     PlainText,
@@ -45,7 +45,7 @@ pub enum TextObjectType {
     Markdown,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TextObject {
     #[serde(rename = "type")]
     pub ty: TextObjectType,
@@ -56,7 +56,7 @@ pub struct TextObject {
     pub verbatim: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SectionBlock {
     pub text: TextObject,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,7 +65,7 @@ pub struct SectionBlock {
     pub fields: Option<Vec<TextObject>>, //pub accessory:
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ActionBlock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_id: Option<String>,
@@ -73,7 +73,7 @@ pub struct ActionBlock {
     pub elements: Option<Vec<BlockElement>>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum ButtonStyle {
     #[serde(rename = "primary")]
     Primary,
@@ -81,7 +81,7 @@ pub enum ButtonStyle {
     Danger,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ButtonBlock {
     pub text: TextObject,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -94,7 +94,7 @@ pub struct ButtonBlock {
     pub style: Option<ButtonStyle>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageBlock {
     #[serde(rename = "type")]
     pub ty: String,
@@ -106,7 +106,7 @@ pub struct ImageBlock {
     pub block_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum BlockElement {
@@ -126,7 +126,7 @@ pub enum BlockElement {
     Image(ImageBlock),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Block {
     pub block_id: String,
     pub elements: Vec<BlockElement>,
@@ -134,33 +134,33 @@ pub struct Block {
     pub ty: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Reaction {
     pub count: u32,
     pub name: String,
     pub users: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Edited {
     pub ts: StrTimeStamp,
     pub user: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Icons {
     pub image_36: Option<String>,
     pub image_48: Option<String>,
     pub image_72: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct MessageCommon {
     pub text: String,
     pub ts: StrTimeStamp,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BasicMessage {
     #[serde(flatten)]
     pub common: MessageCommon,
@@ -169,27 +169,27 @@ pub struct BasicMessage {
     pub edited: Option<Edited>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BotMessage {
     #[serde(flatten)]
     pub common: MessageCommon,
     pub bot_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ChannelJoinMessage {
     #[serde(flatten)]
     pub common: MessageCommon,
     pub user: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct LinksItem {
     pub url: String, //Error("invalid type: string expected a borrowed string", line: 0, column: 0)
     pub domain: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct LinkSharedMessage {
     pub user: String,
     pub channel: String,
@@ -198,7 +198,7 @@ pub struct LinkSharedMessage {
     pub event_ts: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "subtype")]
 #[serde(rename_all = "snake_case")]
 pub enum TaggedMessage {
@@ -206,14 +206,14 @@ pub enum TaggedMessage {
     ChannelJoin(ChannelJoinMessage),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum Message {
     TaggedMessage(TaggedMessage),
     BasicMessage(BasicMessage),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum InternalEvent {
@@ -221,7 +221,7 @@ pub enum InternalEvent {
     LinkShared(LinkSharedMessage),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct EventCallback {
     pub api_app_id: String,
     pub authed_users: Vec<String>,
@@ -232,18 +232,18 @@ pub struct EventCallback {
     pub token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct UsersList {
     pub members: Vec<Member>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Member {
     pub id: String,
     pub name: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum SlackEvent {
@@ -272,7 +272,7 @@ pub enum SlackEvent {
  * Sent from client.
  */
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PostMessage<'a> {
     pub channel: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]

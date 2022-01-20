@@ -9,7 +9,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     let slack_bot_format = format!("<@{}>", bot.bot_id());
     let is_bot_command = msg.text.contains(&slack_bot_format);
 
-    if is_bot_command == false {
+    if !is_bot_command {
         return Ok(());
     }
 
@@ -19,7 +19,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
     let slices = command_str.split_whitespace().collect::<Vec<&str>>();
 
-    if slices.len() == 0 {
+    if slices.is_empty() {
         return Ok(());
     }
 
@@ -33,7 +33,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
         let records: Vec<String> = conn.zrange("ditto-archive", 0, -1).unwrap();
 
-        if records.len() == 0 {
+        if records.is_empty() {
             return bot
                 .send_message(
                     &msg.channel,
@@ -53,7 +53,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         }
 
         for record in records {
-            let user_id = record.split(":").nth(1).unwrap().to_string();
+            let user_id = record.split(':').nth(1).unwrap().to_string();
 
             let prev_count = table.get(&user_id);
             let next_count = match prev_count {
@@ -79,7 +79,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
         let user_name_map = get_users_list(bot.bot_token())
             .await
-            .unwrap_or(HashMap::<String, String>::new());
+            .unwrap_or_else(|_| HashMap::<String, String>::new());
 
         let mut vec_bar = Vec::<String>::new();
 

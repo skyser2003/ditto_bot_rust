@@ -4,7 +4,7 @@ use once_cell::sync::OnceCell;
 use regex::Regex;
 use reqwest::Url;
 
-const TITLE_REGEX: OnceCell<Regex> = OnceCell::new();
+static TITLE_REGEX: OnceCell<Regex> = OnceCell::new();
 
 pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     if let Some(link) = &msg.link {

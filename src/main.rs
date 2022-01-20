@@ -198,13 +198,10 @@ async fn http_handler<'a>(
     debug!("Parsed Event: {:?}", event);
 
     match event {
-        slack::SlackEvent::UrlVerification { challenge, .. } => {
-            HttpResponse::Challenge(challenge.to_string())
-        }
+        slack::SlackEvent::UrlVerification { challenge, .. } => HttpResponse::Challenge(challenge),
         slack::SlackEvent::EventCallback(event_callback) => {
             match (&event_callback.event).try_into() {
                 Ok(msg) => {
-                    let bot = bot.clone();
                     tokio::task::spawn(async move {
                         if let Err(e) = bot.slack_event_handler(msg).await {
                             error!("Error occured while handling slack event - {:?}", e);

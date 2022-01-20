@@ -303,7 +303,11 @@ async fn main() -> anyhow::Result<()> {
     info!("Bot token: {:?}", bot_token);
 
     let bot_id = env::var("BOT_ID").context("Bot id is not given")?;
-    let redis_address = env::var("REDIS_ADDRESS").context("Redis address is not given")?;
+    let redis_address = if cfg!(feature = "redis") {
+        env::var("REDIS_ADDRESS").context("Redis address is not given")?
+    } else {
+        "NONE".to_string()
+    };
 
     info!("Slack bot id: {:?}", bot_id);
     info!("Redis address: {:?}", redis_address);

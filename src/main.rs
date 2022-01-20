@@ -6,6 +6,8 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::MethodFilter;
 use axum::{AddExtensionLayer, Json};
+use axum_server::Handle;
+use axum_server::tls_rustls::RustlsConfig;
 use log::{debug, error, info};
 use reqwest::StatusCode;
 use std::sync::Arc;
@@ -332,36 +334,38 @@ async fn main() -> anyhow::Result<()> {
         auth::SlackAuthorization(signing_secret)
     }));
 
-    // let use_ssl = env::var("USE_SSL")
-    //     .ok()
-    //     .and_then(|v| v.parse().ok())
-    //     .unwrap_or(false);
-    // if use_ssl {
-    //     // info!("Trying to bind ssl.");
-    //     // let mut config = ServerConfig::new(NoClientAuth::new());
-    //     // let mut cert_file = BufReader::new(
-    //     //     File::open("PUBLIC_KEY.pem")
-    //     //         .context("SSL enabled. but failed to open PUBLIC_KEY.pem")?,
-    //     // );
-    //     // let mut key_file = BufReader::new(
-    //     //     File::open("PRIVATE_KEY.pem")
-    //     //         .context("SSL enabled. but failed to open PRIVATE_KEY.pem")?,
-    //     // );
-    //     // let cert_chain = certs(&mut cert_file).map_err(|_| anyhow!("Failed to parse certs"))?;
-    //     // let mut keys =
-    //     //     rsa_private_keys(&mut key_file).map_err(|_| anyhow!("Failed to parse private keys"))?;
+    let use_ssl = env::var("USE_SSL")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(false);
+    if use_ssl {
+        info!("Start to bind address with ssl.");
+        let config = RustlsConfig::from_pem_file(
+                "PUBLIC_KEY.pem",
+                "PRIVATE_KEY.pem",
+            ).await
+             .context("Fail to open pem files")?;
 
-    //     // if keys.is_empty() {
-    //     //     panic!("Fails to load a private key file. Check it is formatted in RSA.")
-    //     // }
-    //     // config.set_single_cert(cert_chain, keys.remove(0))?;
+        let handle = Handle::new();
+        let handle_for_ctrl = handle.clone();
 
-    //     // http_srv = http_srv.bind_rustls("0.0.0.0:14475", config)?;
-    // }
-    axum::Server::bind(&"0.0.0.0:8082".parse()?)
-        .serve(app.into_make_service())
-        .with_graceful_shutdown(futures::FutureExt::map(tokio::signal::ctrl_c(), |_| ()))
-        .await?;
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c().await.expect("Failed to listen signal.");
+            info!("Gracefully shutdown...");
+            handle_for_ctrl.graceful_shutdown(None);
+        });
+
+        axum_server::bind_rustls("0.0.0.0:14475".parse()?, config)
+            .handle(handle)
+            .serve(app.into_make_service())
+            .await?;
+    } else {
+        info!("Start to bind address with HTTP.");
+        axum::Server::bind(&"0.0.0.0:8082".parse()?)
+            .serve(app.into_make_service())
+            .with_graceful_shutdown(futures::FutureExt::map(tokio::signal::ctrl_c(), |_| ()))
+            .await?;
+    }
 
     Ok(())
 }

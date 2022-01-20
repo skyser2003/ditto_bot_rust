@@ -5,7 +5,6 @@ use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-
 #[cfg(feature = "surplus")]
 pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     let slack_bot_format = format!("<@{}>", bot.bot_id());
@@ -173,5 +172,5 @@ async fn get_users_list(bot_token: &str) -> anyhow::Result<HashMap<String, Strin
 }
 #[cfg(not(feature = "surplus"))]
 pub async fn handle<'a, B: crate::Bot>(_: &B, _: &crate::MessageEvent) -> anyhow::Result<()> {
-    return Ok(())
+    return Ok(());
 }

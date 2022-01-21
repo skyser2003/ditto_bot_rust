@@ -6,9 +6,7 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::MethodFilter;
 use axum::{AddExtensionLayer, Json};
-use axum_server::tls_rustls::RustlsConfig;
-use axum_server::Handle;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use reqwest::StatusCode;
 use std::sync::Arc;
 use std::{
@@ -257,9 +255,21 @@ async fn main() -> anyhow::Result<()> {
 
     let use_ssl = env::var("USE_SSL")
         .ok()
-        .and_then(|v| v.parse().ok())
+        .and_then(|v| {
+            if cfg!(feature = "use-ssl") {
+                v.parse().ok()
+            } else {
+                warn!("use-ssl feature is disabled!. USE_SSL env will be ignored");
+                Some(false)
+            }
+        })
         .unwrap_or(false);
     if use_ssl {
+        #[cfg(feature = "use-ssl")]
+        {
+            use axum_server::tls_rustls::RustlsConfig;
+            use axum_server::Handle;
+
         info!("Start to bind address with ssl.");
         let config = RustlsConfig::from_pem_file("PUBLIC_KEY.pem", "PRIVATE_KEY.pem")
             .await
@@ -280,6 +290,7 @@ async fn main() -> anyhow::Result<()> {
             .handle(handle)
             .serve(app.into_make_service())
             .await?;
+        }
     } else {
         info!("Start to bind address with HTTP.");
         axum::Server::bind(&"0.0.0.0:8082".parse()?)

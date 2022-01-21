@@ -47,7 +47,7 @@ ENV PKG_CONFIG_ALL_STATIC=1
 RUN cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl && \
   mv target/$(cat TARGETARCH)-unknown-linux-musl/release/ditto-bot-rust /ditto-bot-rust
 
-FROM scratch
+FROM --platform=linux/$TARGETARCH scratch
 
 COPY --from=builder /ditto-bot-rust /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

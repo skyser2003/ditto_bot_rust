@@ -137,35 +137,7 @@ impl DittoBot {
             return Ok(());
         }
 
-        macro_rules! invoke_modules {
-            (($self:ident, $msg:ident) => [$($(#[cfg($meta:meta)])? $module:path),*]) => {
-                tokio::join!($(invoke_modules!(@mod $($meta,)? $self, $msg, $module)),*)
-            };
-            (@mod $meta:meta, $self:ident, $msg:ident, $module:path) => {{
-                #[cfg($meta)]
-                let m = $module($self, &$msg);
-                #[cfg(not($meta))]
-                let m = futures::future::ok::<(), anyhow::Error>(());
-                invoke_modules!(@log_error $module => m)
-            }};
-            (@mod $self:ident, $msg:ident, $module:path) => {
-                invoke_modules!(@log_error $module => $module($self, &$msg))
-            };
-            (@log_error $module:path => $($body:tt)+) => {
-                futures::TryFutureExt::unwrap_or_else($($body)+, |e| {
-                    error!("Module {} returned error - {}", stringify!($module), e);
-                })
-            };
-        }
-
-        invoke_modules!(
-            (self, msg) => [
-                modules::surplus::handle,
-                modules::mhw::handle,
-                modules::namuwiki::handle,
-                modules::ph::handle
-            ]
-        );
+        modules::invoke_all_modules(self, msg).await;
 
         Ok(())
     }

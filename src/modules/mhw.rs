@@ -1,4 +1,5 @@
 use crate::slack;
+use crate::Message;
 use rand::{thread_rng, Rng};
 
 struct MonsterHunterData<'a> {
@@ -54,13 +55,13 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
                 if msg.text.contains(keyword) {
                     bot.send_message(
                         &msg.channel,
-                        &[slack::BlockElement::Image(slack::ImageBlock {
+                        Message::Blocks(&[slack::BlockElement::Image(slack::ImageBlock {
                             ty: "image".to_string(),
                             image_url: data.image_url.to_string(),
                             alt_text: data.text.to_string(),
                             title: None,
                             block_id: None,
-                        })],
+                        })]),
                     )
                     .await?;
                 }

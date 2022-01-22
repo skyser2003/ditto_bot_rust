@@ -1,4 +1,4 @@
-use crate::slack;
+use crate::{slack, Message};
 use redis::Commands;
 use slack::UsersList;
 use std::cmp::{max, min};
@@ -37,7 +37,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
             return bot
                 .send_message(
                     &msg.channel,
-                    &[slack::BlockElement::Section(slack::SectionBlock {
+                    Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
                         text: slack::TextObject {
                             ty: slack::TextObjectType::PlainText,
                             text: "[There is no chat record.]".to_string(),
@@ -46,7 +46,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                         },
                         block_id: None,
                         fields: None,
-                    })],
+                    })]),
                 )
                 .await
                 .and(Ok(()));
@@ -100,7 +100,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return bot
             .send_message(
                 &msg.channel,
-                &[slack::BlockElement::Section(slack::SectionBlock {
+                Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
                     text: slack::TextObject {
                         ty: slack::TextObjectType::Markdown,
                         text: graph_text,
@@ -109,7 +109,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                     },
                     block_id: None,
                     fields: None,
-                })],
+                })]),
             )
             .await
             .and(Ok(()));

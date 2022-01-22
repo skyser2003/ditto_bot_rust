@@ -1,13 +1,29 @@
 use anyhow::anyhow;
 use std::sync::RwLock;
 
+use crate::Message;
+
+pub enum MockMessage {
+    Blocks(Vec<super::slack::BlockElement>),
+    Text(String),
+}
+
+impl<'a> From<Message<'a>> for MockMessage {
+    fn from(msg: Message<'a>) -> Self {
+        match msg {
+            Message::Blocks(blocks) => MockMessage::Blocks(blocks.iter().cloned().collect()),
+            Message::Text(text) => MockMessage::Text(text.to_string()),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct MockBot {
-    messages: RwLock<Vec<(String, Vec<super::slack::BlockElement>)>>,
+    messages: RwLock<Vec<(String, MockMessage)>>,
 }
 
 impl MockBot {
-    pub fn dump_messages(&self) -> anyhow::Result<Vec<(String, Vec<super::slack::BlockElement>)>> {
+    pub fn dump_messages(&self) -> anyhow::Result<Vec<(String, MockMessage)>> {
         let mut messages = self
             .messages
             .write()
@@ -29,16 +45,12 @@ impl super::Bot for MockBot {
         ""
     }
 
-    async fn send_message(
-        &self,
-        channel: &str,
-        blocks: &[super::slack::BlockElement],
-    ) -> anyhow::Result<()> {
+    async fn send_message(&self, channel: &str, message: Message<'_>) -> anyhow::Result<()> {
         let mut messages = self
             .messages
             .write()
             .map_err(|e| anyhow!("write lock failed - {}", e))?;
-        messages.push((channel.to_string(), blocks.iter().cloned().collect()));
+        messages.push((channel.to_string(), message.into()));
 
         Ok(())
     }

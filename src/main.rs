@@ -8,6 +8,7 @@ use axum::routing::MethodFilter;
 use axum::{AddExtensionLayer, Json};
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
+use slack::PostMessage;
 use std::sync::Arc;
 use std::{
     convert::{TryFrom, TryInto},
@@ -54,15 +55,33 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
     }
 }
 
+pub enum Message<'a> {
+    Blocks(&'a [slack::BlockElement]),
+    Text(&'a str),
+}
+
+impl<'a> Message<'a> {
+    fn as_postmessage(&self, channel: &'a str) -> PostMessage<'a> {
+        match self {
+            Message::Blocks(blocks) => slack::PostMessage {
+                channel,
+                text: None,
+                blocks: Some(blocks),
+            },
+            Message::Text(text) => slack::PostMessage {
+                channel,
+                text: Some(text),
+                blocks: None,
+            },
+        }
+    }
+}
+
 #[async_trait]
 pub trait Bot {
     fn bot_id(&self) -> &'_ str;
     fn bot_token(&self) -> &'_ str;
-    async fn send_message(
-        &self,
-        channel: &str,
-        blocks: &[slack::BlockElement],
-    ) -> anyhow::Result<()>;
+    async fn send_message(&self, channel: &str, msg: Message<'_>) -> anyhow::Result<()>;
     fn redis(&self) -> redis::Connection;
 }
 
@@ -83,22 +102,14 @@ impl Bot for DittoBot {
         &self.bot_token
     }
 
-    async fn send_message(
-        &self,
-        channel: &str,
-        blocks: &[slack::BlockElement],
-    ) -> anyhow::Result<()> {
+    async fn send_message(&self, channel: &str, message: Message<'_>) -> anyhow::Result<()> {
         let builder = self
             .http_client
             .post("https://slack.com/api/chat.postMessage")
             .header("Content-type", "application/json; charset=utf-8")
             .header("Authorization", format!("Bearer {}", &self.bot_token));
 
-        let reply = slack::PostMessage {
-            channel,
-            text: None,
-            blocks: Some(blocks),
-        };
+        let reply = message.as_postmessage(channel);
 
         let resp = builder
             .json(&reply)
@@ -270,26 +281,26 @@ async fn main() -> anyhow::Result<()> {
             use axum_server::tls_rustls::RustlsConfig;
             use axum_server::Handle;
 
-        info!("Start to bind address with ssl.");
-        let config = RustlsConfig::from_pem_file("PUBLIC_KEY.pem", "PRIVATE_KEY.pem")
-            .await
-            .context("Fail to open pem files")?;
-
-        let handle = Handle::new();
-        let handle_for_ctrl = handle.clone();
-
-        tokio::spawn(async move {
-            tokio::signal::ctrl_c()
+            info!("Start to bind address with ssl.");
+            let config = RustlsConfig::from_pem_file("PUBLIC_KEY.pem", "PRIVATE_KEY.pem")
                 .await
-                .expect("Failed to listen signal.");
-            info!("Gracefully shutdown...");
-            handle_for_ctrl.graceful_shutdown(None);
-        });
+                .context("Fail to open pem files")?;
 
-        axum_server::bind_rustls("0.0.0.0:14475".parse()?, config)
-            .handle(handle)
-            .serve(app.into_make_service())
-            .await?;
+            let handle = Handle::new();
+            let handle_for_ctrl = handle.clone();
+
+            tokio::spawn(async move {
+                tokio::signal::ctrl_c()
+                    .await
+                    .expect("Failed to listen signal.");
+                info!("Gracefully shutdown...");
+                handle_for_ctrl.graceful_shutdown(None);
+            });
+
+            axum_server::bind_rustls("0.0.0.0:14475".parse()?, config)
+                .handle(handle)
+                .serve(app.into_make_service())
+                .await?;
         }
     } else {
         info!("Start to bind address with HTTP.");

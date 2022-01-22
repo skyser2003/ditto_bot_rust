@@ -1,17 +1,12 @@
-use crate::slack::BlockElement;
+use crate::Message;
 
 pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     if msg.text != "ㅍㅎ" {
         return Ok(());
     }
 
-    bot.send_message(
-        &msg.channel,
-        &[BlockElement::Text {
-            text: ":angdev:ㅊㅎ".to_string(),
-        }],
-    )
-    .await?;
+    bot.send_message(&msg.channel, Message::Text(":angdev:ㅊㅎ"))
+        .await?;
 
     Ok(())
 }
@@ -19,7 +14,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 #[tokio::test]
 #[cfg(test)]
 async fn test_ph() -> anyhow::Result<()> {
-    use crate::MessageEvent;
+    use crate::{test::MockMessage, MessageEvent};
 
     let bot: crate::test::MockBot = Default::default();
 
@@ -49,7 +44,7 @@ async fn test_ph() -> anyhow::Result<()> {
 
     let messages = bot.dump_messages()?;
     assert_eq!(messages.len(), 1);
-    if let BlockElement::Text { text, .. } = &messages[0].1[0] {
+    if let MockMessage::Text(text) = &messages[0].1 {
         assert_eq!(text, ":angdev:ㅊㅎ");
     } else {
         panic!("Wrong response");

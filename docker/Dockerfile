@@ -1,3 +1,5 @@
+ARG TARGETARCH
+
 FROM rust:1.57-alpine AS builder
 
 WORKDIR /ws
@@ -47,7 +49,8 @@ ENV PKG_CONFIG_ALL_STATIC=1
 RUN cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl --features check-req && \
   mv target/$(cat TARGETARCH)-unknown-linux-musl/release/ditto-bot-rust /ditto-bot-rust
 
-FROM --platform=linux/$TARGETARCH scratch
+# XXX: using scratch create HOSTARCH image.
+FROM --platform=linux/${TARGETARCH} alpine
 
 COPY --from=builder /ditto-bot-rust /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

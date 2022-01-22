@@ -143,14 +143,6 @@ impl DittoBot {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-enum Error {
-    #[error("{0}")]
-    UnspecifiedError(#[from] anyhow::Error),
-    #[error("event parse failed")]
-    EventParsingError,
-}
-
 #[cfg(feature = "check-req")]
 mod auth;
 

@@ -44,7 +44,7 @@ ADD Cargo.toml ./
 ADD src/ ./src
 
 ENV PKG_CONFIG_ALL_STATIC=1
-RUN cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl && \
+RUN cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl --features check-req && \
   mv target/$(cat TARGETARCH)-unknown-linux-musl/release/ditto-bot-rust /ditto-bot-rust
 
 FROM --platform=linux/$TARGETARCH scratch

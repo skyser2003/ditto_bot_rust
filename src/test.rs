@@ -50,6 +50,10 @@ impl super::Bot for MockBot {
             .messages
             .write()
             .map_err(|e| anyhow!("write lock failed - {}", e))?;
+        eprintln!(
+            "{}",
+            serde_json::to_string_pretty(&message.as_postmessage(channel))?
+        );
         messages.push((channel.to_string(), message.into()));
 
         Ok(())

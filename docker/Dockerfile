@@ -52,4 +52,4 @@ FROM --platform=linux/$TARGETARCH scratch
 COPY --from=builder /ditto-bot-rust /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-ENTRYPOINT ["ditto-bot-rust"]
+ENTRYPOINT ["/ditto-bot-rust"]

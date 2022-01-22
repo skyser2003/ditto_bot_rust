@@ -151,6 +151,7 @@ enum Error {
     EventParsingError,
 }
 
+#[cfg(feature = "check-req")]
 mod auth;
 
 enum HttpResponse {

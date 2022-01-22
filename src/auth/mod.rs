@@ -133,7 +133,10 @@ where
 
     debug!("Success to verify a slack's signature.");
 
-    Ok(Request::new(FromBody::from_body(body.into())))
+    let mut req = Request::new(FromBody::from_body(body.into()));
+    std::mem::swap(req.headers_mut(), request.headers_mut());
+
+    Ok(req)
 }
 
 type SlackAuthorizationFuture<BOut> = BoxFuture<'static, Result<Request<BOut>, Response<BOut>>>;
@@ -184,12 +187,17 @@ mod tests {
             let request = Request::get("/")
                 .header("X-Slack-Signature", SIGNATURE)
                 .header("X-Slack-Request-Timestamp", TIMESTAMP)
+                .header("Content-Type", "plain/text")
                 .body(Body::from(BODY))
                 .unwrap();
 
             let mut res = service.call(request).await.unwrap();
 
             assert_eq!(res.status(), StatusCode::OK);
+            assert_eq!(
+                res.headers().get("Content-Type").unwrap().to_str().unwrap(),
+                "plain/text"
+            );
 
             let body = res.body_mut().data().await.unwrap().unwrap();
             let body = body.chunk();
@@ -228,6 +236,8 @@ mod tests {
 
     async fn echo(mut req: Request<Body>) -> Result<Response<Body>, BoxError> {
         let body = Vec::from(req.body_mut().data().await.unwrap().unwrap().chunk());
-        Ok(Response::new(body.into()))
+        let mut res = Response::new(body.into());
+        std::mem::swap(res.headers_mut(), req.headers_mut());
+        Ok(res)
     }
 }

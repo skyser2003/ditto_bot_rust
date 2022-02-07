@@ -1,6 +1,5 @@
 pub mod mhw;
 pub mod namuwiki;
-pub mod ph;
 pub mod surplus;
 
 pub async fn invoke_all_modules<B: super::Bot>(bot: &B, message: crate::MessageEvent) {
@@ -29,8 +28,7 @@ pub async fn invoke_all_modules<B: super::Bot>(bot: &B, message: crate::MessageE
         (bot, message) => [
             surplus::handle,
             mhw::handle,
-            namuwiki::handle,
-            ph::handle
+            namuwiki::handle
         ]
     );
 }

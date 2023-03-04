@@ -1,3 +1,4 @@
+pub mod chatgpt;
 pub mod mhw;
 pub mod namuwiki;
 pub mod surplus;
@@ -28,7 +29,8 @@ pub async fn invoke_all_modules<B: super::Bot>(bot: &B, message: crate::MessageE
         (bot, message) => [
             surplus::handle,
             mhw::handle,
-            namuwiki::handle
+            namuwiki::handle,
+            chatgpt::handle
         ]
     );
 }

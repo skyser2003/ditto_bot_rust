@@ -13,7 +13,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return Ok(());
     }
 
-    log::debug!("Bot command full_text: {:?}", &msg.text);
+    log::debug!("Surplus: bot command full text = {:?}", &msg.text);
 
     let command_str = msg.text.replace(&slack_bot_format, "");
 

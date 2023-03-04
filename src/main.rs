@@ -81,6 +81,7 @@ impl<'a> Message<'a> {
 pub trait Bot {
     fn bot_id(&self) -> &'_ str;
     fn bot_token(&self) -> &'_ str;
+    fn openai_key(&self) -> &'_ str;
     async fn send_message(&self, channel: &str, msg: Message<'_>) -> anyhow::Result<()>;
     fn redis(&self) -> redis::Connection;
 }
@@ -88,6 +89,7 @@ pub trait Bot {
 struct DittoBot {
     bot_id: String,
     bot_token: String,
+    openai_key: String,
     http_client: reqwest::Client,
     redis_client: redis::Client,
 }
@@ -100,6 +102,10 @@ impl Bot for DittoBot {
 
     fn bot_token(&self) -> &'_ str {
         &self.bot_token
+    }
+
+    fn openai_key(&self) -> &'_ str {
+        &self.openai_key
     }
 
     async fn send_message(&self, channel: &str, message: Message<'_>) -> anyhow::Result<()> {
@@ -210,6 +216,9 @@ async fn main() -> anyhow::Result<()> {
     info!("Slack bot id: {:?}", bot_id);
     info!("Redis address: {:?}", redis_address);
 
+    let openai_key = env::var("OPENAI_KEY").context("OpenAI key is not given")?;
+    info!("Open AI Key: {:?}", openai_key);
+
     let app = axum::Router::new().route(
         "/",
         axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
@@ -217,6 +226,7 @@ async fn main() -> anyhow::Result<()> {
     let app = app.layer(AddExtensionLayer::new(Arc::new(DittoBot {
         bot_id,
         bot_token,
+        openai_key,
         http_client: reqwest::Client::new(),
         redis_client: redis::Client::open(format!("redis://{}", redis_address))
             .context("Failed to create redis client")?,

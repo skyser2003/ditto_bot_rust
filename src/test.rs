@@ -45,6 +45,10 @@ impl super::Bot for MockBot {
         ""
     }
 
+    fn openai_key(&self) -> &str {
+        ""
+    }
+
     async fn send_message(&self, channel: &str, message: Message<'_>) -> anyhow::Result<()> {
         let mut messages = self
             .messages

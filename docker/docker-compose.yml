@@ -12,6 +12,7 @@ services:
       - REDIS_ADDRESS=$REDIS_ADDRESS
       - RUST_LOG=$RUST_LOG
       - BOT_ID=$BOT_ID
+      - OPENAI_KEY=$OPENAI_KEY
     ports:
       - 2525:8082
   redis:

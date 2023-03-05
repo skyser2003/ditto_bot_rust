@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,35 +14,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Check format
-      run: cargo fmt -- --check
+      - name: Check format
+        run: cargo fmt -- --check
 
-    - name: Check editorconfig
-      run: |
-        VERSION="2.1.0"
-        OS="linux"
-        case $(uname -m) in
-        armhf)
-          ARCH="arm"
-          ;;
-        x86_64)
-          ARCH="amd64"
-          ;;
-        i386)
-          ARCH="386"
-          ;;
-        esac
-        curl -O -L -C - https://github.com/editorconfig-checker/editorconfig-checker/releases/download/$VERSION/ec-$OS-$ARCH.tar.gz
-        tar xzf ec-$OS-$ARCH.tar.gz
-        ./bin/ec-$OS-$ARCH
+      - name: Check editorconfig
+        run: |
+          VERSION="2.1.0"
+          OS="linux"
+          case $(uname -m) in
+          armhf)
+            ARCH="arm"
+            ;;
+          x86_64)
+            ARCH="amd64"
+            ;;
+          i386)
+            ARCH="386"
+            ;;
+          esac
+          curl -O -L -C - https://github.com/editorconfig-checker/editorconfig-checker/releases/download/$VERSION/ec-$OS-$ARCH.tar.gz
+          tar xzf ec-$OS-$ARCH.tar.gz
+          ./bin/ec-$OS-$ARCH
 
-    - name: Run tests
-      run: cargo test --verbose --all-features
+      - name: Run tests
+        run: cargo test --verbose --all-features
 
-    - name: Check clippy
-      run: cargo clippy --all-features
+      - name: Check clippy
+        run: cargo clippy --all-features
 
   deploy:
     runs-on: ubuntu-latest
@@ -50,11 +50,11 @@ jobs:
     if: github.ref == 'refs/heads/master'
 
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Build & Push
-      run: docker/build.sh
+      - name: Build & Push
+        run: docker/build.sh
 
-    # - name: Publish
-    #   if: ${{ github.event_name == 'push' }}
-    #   run: curl -X POST ${{secrets.PORTAINER_WEBHOOK}}
+      - name: Publish
+        if: ${{ github.event_name == 'push' }}
+        run: curl -X POST ${{secrets.PORTAINER_WEBHOOK}}

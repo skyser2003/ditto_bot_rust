@@ -113,12 +113,10 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     }
 
     let res = res_result.unwrap();
-    let res_len = res.content_length().unwrap_or(0);
-
     let res_body_result = res.json::<ResChatCompletion>().await;
 
     if res_body_result.is_err() {
-        debug!("OpenAI result json parsing failed: {}", res_len);
+        debug!("OpenAI result json parsing failed");
 
         return bot
             .send_message(
@@ -126,7 +124,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                 Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
                     text: slack::TextObject {
                         ty: slack::TextObjectType::Markdown,
-                        text: format!("OpenAI result json parsing failed: {}", res_len),
+                        text: "OpenAI result json parsing failed".to_string(),
                         emoji: None,
                         verbatim: None,
                     },

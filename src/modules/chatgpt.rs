@@ -16,31 +16,31 @@ struct OpenAIChatCompletionBody {
 
 #[derive(Deserialize)]
 struct ResChatCompletion {
-    id: String,
-    object: String,
-    created: i64,
-    model: String,
-    usage: ResUsage,
+    _id: String,
+    _object: String,
+    _created: i64,
+    _model: String,
+    _usage: ResUsage,
     choices: Vec<ResChoice>,
 }
 
 #[derive(Deserialize)]
 struct ResUsage {
-    prompt_tokens: i32,
-    completion_tokens: i32,
-    total_tokens: i32,
+    _prompt_tokens: i32,
+    _completion_tokens: i32,
+    _total_tokens: i32,
 }
 
 #[derive(Deserialize)]
 struct ResChoice {
     message: ResMessage,
-    finish_reason: String,
-    index: i32,
+    _finish_reason: String,
+    _index: i32,
 }
 
 #[derive(Deserialize)]
 struct ResMessage {
-    role: String,
+    _role: String,
     content: String,
 }
 

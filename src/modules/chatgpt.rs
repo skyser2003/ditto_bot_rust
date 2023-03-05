@@ -113,7 +113,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     }
 
     let res = res_result.unwrap();
-    let res_len = res.content_length().unwrap();
+    let res_len = res.content_length().unwrap_or(0);
 
     let res_body_result = res.json::<ResChatCompletion>().await;
 

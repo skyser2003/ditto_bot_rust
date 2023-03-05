@@ -96,7 +96,8 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         .await;
 
     if res_result.is_err() {
-        debug!("OpenAI API call failed");
+        let debug_str = "OpenAI API call failed";
+        debug!("{}", debug_str);
 
         return bot
             .send_message(
@@ -104,7 +105,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                 Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
                     text: slack::TextObject {
                         ty: slack::TextObjectType::Markdown,
-                        text: "OpenAI API call failed".to_string(),
+                        text: debug_str.to_string(),
                         emoji: None,
                         verbatim: None,
                     },
@@ -117,10 +118,13 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     }
 
     let res = res_result.unwrap();
-    let res_body_result = res.json::<ResChatCompletion>().await;
+    let res_len = res.content_length().unwrap_or(0);
 
-    if res_body_result.is_err() {
-        debug!("OpenAI result json parsing failed");
+    let res_bytes = res.bytes().await;
+
+    if res_bytes.is_err() {
+        let debug_str = format!("OpenAI result bytes error: {}", res_len);
+        debug!("{}", debug_str);
 
         return bot
             .send_message(
@@ -128,7 +132,37 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                 Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
                     text: slack::TextObject {
                         ty: slack::TextObjectType::Markdown,
-                        text: "OpenAI result json parsing failed".to_string(),
+                        text: debug_str,
+                        emoji: None,
+                        verbatim: None,
+                    },
+                    block_id: None,
+                    fields: None,
+                })]),
+            )
+            .await
+            .and(Ok(()));
+    }
+
+    let res_bytes = res_bytes.unwrap();
+
+    let res_body_result = serde_json::from_slice::<ResChatCompletion>(&res_bytes);
+
+    if res_body_result.is_err() {
+        let debug_str = format!(
+            "OpenAI result json parsing failed: {:?}",
+            String::from_utf8(res_bytes.to_vec()).unwrap()
+        );
+
+        debug!("{}", debug_str);
+
+        return bot
+            .send_message(
+                &msg.channel,
+                Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
+                    text: slack::TextObject {
+                        ty: slack::TextObjectType::Markdown,
+                        text: debug_str,
                         emoji: None,
                         verbatim: None,
                     },

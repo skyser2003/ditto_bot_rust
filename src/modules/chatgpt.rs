@@ -15,33 +15,37 @@ struct OpenAIChatCompletionBody {
     messages: Vec<OpenAIChatCompletionMessage>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct ResChatCompletion {
-    _id: String,
-    _object: String,
-    _created: i64,
-    _model: String,
-    _usage: ResUsage,
+    id: String,
+    object: String,
+    created: i64,
+    model: String,
+    usage: ResUsage,
     choices: Vec<ResChoice>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct ResUsage {
-    _prompt_tokens: i32,
-    _completion_tokens: i32,
-    _total_tokens: i32,
+    prompt_tokens: i32,
+    completion_tokens: i32,
+    total_tokens: i32,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct ResChoice {
     message: ResMessage,
-    _finish_reason: String,
-    _index: i32,
+    finish_reason: String,
+    index: i32,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct ResMessage {
-    _role: String,
+    role: String,
     content: String,
 }
 

@@ -93,7 +93,23 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
     if res_result.is_err() {
         debug!("OpenAI API call failed");
-        return Ok(());
+
+        return bot
+            .send_message(
+                &msg.channel,
+                Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
+                    text: slack::TextObject {
+                        ty: slack::TextObjectType::Markdown,
+                        text: "OpenAI API call failed".to_string(),
+                        emoji: None,
+                        verbatim: None,
+                    },
+                    block_id: None,
+                    fields: None,
+                })]),
+            )
+            .await
+            .and(Ok(()));
     }
 
     let res = res_result.unwrap();
@@ -103,6 +119,23 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
     if res_body_result.is_err() {
         debug!("OpenAI result json parsing failed: {}", res_len);
+
+        return bot
+            .send_message(
+                &msg.channel,
+                Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
+                    text: slack::TextObject {
+                        ty: slack::TextObjectType::Markdown,
+                        text: format!("OpenAI result json parsing failed: {}", res_len),
+                        emoji: None,
+                        verbatim: None,
+                    },
+                    block_id: None,
+                    fields: None,
+                })]),
+            )
+            .await
+            .and(Ok(()));
     }
 
     let res_body = res_body_result.unwrap();

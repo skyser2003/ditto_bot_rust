@@ -1,7 +1,10 @@
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use crate::{slack, Message};
+use crate::{
+    slack::{BlockElement, SectionBlock},
+    Message,
+};
 
 #[derive(Serialize)]
 struct OpenAIChatCompletionMessage {
@@ -102,16 +105,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return bot
             .send_message(
                 &msg.channel,
-                Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
-                    text: slack::TextObject {
-                        ty: slack::TextObjectType::Markdown,
-                        text: debug_str.to_string(),
-                        emoji: None,
-                        verbatim: None,
-                    },
-                    block_id: None,
-                    fields: None,
-                })]),
+                Message::Blocks(&[BlockElement::Section(SectionBlock::new(debug_str))]),
             )
             .await
             .and(Ok(()));
@@ -129,16 +123,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return bot
             .send_message(
                 &msg.channel,
-                Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
-                    text: slack::TextObject {
-                        ty: slack::TextObjectType::Markdown,
-                        text: debug_str,
-                        emoji: None,
-                        verbatim: None,
-                    },
-                    block_id: None,
-                    fields: None,
-                })]),
+                Message::Blocks(&[BlockElement::Section(SectionBlock::new(&debug_str))]),
             )
             .await
             .and(Ok(()));
@@ -159,16 +144,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return bot
             .send_message(
                 &msg.channel,
-                Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
-                    text: slack::TextObject {
-                        ty: slack::TextObjectType::Markdown,
-                        text: debug_str,
-                        emoji: None,
-                        verbatim: None,
-                    },
-                    block_id: None,
-                    fields: None,
-                })]),
+                Message::Blocks(&[BlockElement::Section(SectionBlock::new(&debug_str))]),
             )
             .await
             .and(Ok(()));
@@ -186,27 +162,8 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
     let output_text = format!("> {}", res_text);
 
-    let gpt_name_block = slack::BlockElement::Section(slack::SectionBlock {
-        text: slack::TextObject {
-            ty: slack::TextObjectType::Markdown,
-            text: "`ChatGPT`".to_string(),
-            emoji: None,
-            verbatim: None,
-        },
-        block_id: None,
-        fields: None,
-    });
-
-    let gpt_answer_block = slack::BlockElement::Section(slack::SectionBlock {
-        text: slack::TextObject {
-            ty: slack::TextObjectType::Markdown,
-            text: output_text,
-            emoji: None,
-            verbatim: None,
-        },
-        block_id: None,
-        fields: None,
-    });
+    let gpt_name_block = BlockElement::Section(SectionBlock::new("`ChatGPT`"));
+    let gpt_answer_block = BlockElement::Section(SectionBlock::new(&output_text));
 
     return bot
         .send_message(

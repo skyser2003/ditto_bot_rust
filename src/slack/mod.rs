@@ -282,5 +282,20 @@ pub struct PostMessage<'a> {
     // pub as_user: Option<bool>,
 }
 
+impl SectionBlock {
+    pub fn new(text: &str) -> Self {
+        Self {
+            text: TextObject {
+                ty: TextObjectType::Markdown,
+                text: text.to_string(),
+                emoji: None,
+                verbatim: None,
+            },
+            block_id: None,
+            fields: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test;

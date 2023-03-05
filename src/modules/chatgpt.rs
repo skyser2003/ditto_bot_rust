@@ -1,3 +1,4 @@
+use log::debug;
 use serde::{Deserialize, Serialize};
 
 use crate::{slack, Message};
@@ -52,7 +53,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return Ok(());
     }
 
-    log::debug!("GPT: bot command full text = {:?}", &msg.text);
+    debug!("GPT: bot command full text = {:?}", &msg.text);
 
     let command_str = msg.text.replace(&slack_bot_format, "");
 
@@ -63,7 +64,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     }
 
     let call_type = slices[0];
-    log::debug!("call_type: {:?}", call_type);
+    debug!("call_type: {:?}", call_type);
 
     if call_type != "gpt" && call_type != "chatgpt" {
         return Ok(());
@@ -83,14 +84,28 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0")
         .build()?;
 
-    let res = req_client
+    let res_result = req_client
         .post("https://api.openai.com/v1/chat/completions")
         .bearer_auth(bot.openai_key())
         .json(&req_body)
         .send()
-        .await?;
+        .await;
 
-    let res_body = res.json::<ResChatCompletion>().await?;
+    if res_result.is_err() {
+        debug!("OpenAI API call failed");
+        return Ok(());
+    }
+
+    let res = res_result.unwrap();
+    let res_len = res.content_length().unwrap();
+
+    let res_body_result = res.json::<ResChatCompletion>().await;
+
+    if res_body_result.is_err() {
+        debug!("OpenAI result json parsing failed: {}", res_len);
+    }
+
+    let res_body = res_body_result.unwrap();
 
     let res_text = if res_body.choices.len() == 0 {
         "ditto_bot Error: "

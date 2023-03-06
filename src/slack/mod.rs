@@ -283,10 +283,18 @@ pub struct PostMessage<'a> {
 }
 
 impl SectionBlock {
-    pub fn new(text: &str) -> Self {
+    pub fn new_markdown(text: &str) -> Self {
+        Self::new_block(text, TextObjectType::Markdown)
+    }
+
+    pub fn new_text(text: &str) -> Self {
+        Self::new_block(text, TextObjectType::PlainText)
+    }
+
+    fn new_block(text: &str, ty: TextObjectType) -> Self {
         Self {
             text: TextObject {
-                ty: TextObjectType::Markdown,
+                ty,
                 text: text.to_string(),
                 emoji: None,
                 verbatim: None,

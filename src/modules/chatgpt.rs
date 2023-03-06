@@ -105,7 +105,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return bot
             .send_message(
                 &msg.channel,
-                Message::Blocks(&[BlockElement::Section(SectionBlock::new(debug_str))]),
+                Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(debug_str))]),
             )
             .await
             .and(Ok(()));
@@ -123,7 +123,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return bot
             .send_message(
                 &msg.channel,
-                Message::Blocks(&[BlockElement::Section(SectionBlock::new(&debug_str))]),
+                Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(&debug_str))]),
             )
             .await
             .and(Ok(()));
@@ -144,7 +144,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return bot
             .send_message(
                 &msg.channel,
-                Message::Blocks(&[BlockElement::Section(SectionBlock::new(&debug_str))]),
+                Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(&debug_str))]),
             )
             .await
             .and(Ok(()));
@@ -162,8 +162,8 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
     let output_text = format!("> {}", res_text);
 
-    let gpt_name_block = BlockElement::Section(SectionBlock::new("`ChatGPT`"));
-    let gpt_answer_block = BlockElement::Section(SectionBlock::new(&output_text));
+    let gpt_name_block = BlockElement::Section(SectionBlock::new_markdown("`ChatGPT`"));
+    let gpt_answer_block = BlockElement::Section(SectionBlock::new_text(&output_text));
 
     return bot
         .send_message(

@@ -250,6 +250,41 @@ pub struct Member {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub enum ThreadMessageType {
+    First(ThreadFirstMessage),
+    Rest(ThreadRestMessage),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ThreadListResponse {
+    messags: Vec<ThreadMessageType>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ThreadFirstMessage {
+    #[serde(rename = "type")]
+    ty: String,
+    user: String,
+    text: String,
+    thread_ts: StrTimeStamp,
+    reply_count: i32,
+    ts: StrTimeStamp,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ThreadRestMessage {
+    #[serde(rename = "type")]
+    ty: String,
+    user: String,
+    text: String,
+    thread_ts: StrTimeStamp,
+    parent_user_id: String,
+    ts: StrTimeStamp,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum SlackEvent {

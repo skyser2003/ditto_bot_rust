@@ -41,7 +41,7 @@ struct ResUsage {
 #[derive(Deserialize)]
 struct ResChoice {
     message: ResMessage,
-    finish_reason: String,
+    finish_reason: Optional<String>,
     index: i32,
 }
 

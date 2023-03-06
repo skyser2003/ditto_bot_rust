@@ -60,8 +60,6 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return Ok(());
     }
 
-    debug!("GPT: bot command full text = {:?}", &msg.text);
-
     let command_str = msg.text.replace(&slack_bot_format, "");
 
     let slices = command_str.split_whitespace().collect::<Vec<&str>>();
@@ -71,11 +69,13 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     }
 
     let call_type = slices[0];
-    debug!("call_type: {:?}", call_type);
 
     if call_type != "gpt" && call_type != "chatgpt" {
         return Ok(());
     }
+
+    debug!("GPT: bot command full text = {:?}", &msg.text);
+    debug!("call_type: {:?}", call_type);
 
     let input_text = slices.iter().cloned().skip(1).collect::<Vec<_>>().join(" ");
 

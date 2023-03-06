@@ -13,8 +13,6 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return Ok(());
     }
 
-    log::debug!("Surplus: bot command full text = {:?}", &msg.text);
-
     let command_str = msg.text.replace(&slack_bot_format, "");
 
     let slices = command_str.split_whitespace().collect::<Vec<&str>>();
@@ -26,9 +24,11 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     let mut conn = bot.redis();
 
     let call_type = slices[0];
-    log::debug!("call_type: {:?}", call_type);
 
     if call_type == "잉여" {
+        log::debug!("Surplus: bot command full text = {:?}", &msg.text);
+        log::debug!("call_type: {:?}", call_type);
+
         let mut table = std::collections::HashMap::<String, i32>::new();
 
         let records: Vec<String> = conn.zrange("ditto-archive", 0, -1).unwrap();

@@ -47,6 +47,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                         block_id: None,
                         fields: None,
                     })]),
+                    None,
                 )
                 .await
                 .and(Ok(()));
@@ -110,6 +111,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                     block_id: None,
                     fields: None,
                 })]),
+                None,
             )
             .await
             .and(Ok(()));

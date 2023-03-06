@@ -24,7 +24,13 @@ pub struct MessageEvent {
     user: String,
     channel: String,
     text: String,
+    ts: String,
     link: Option<String>,
+}
+
+pub struct ReplyMessageEvent<'a> {
+    msg: &'a str,
+    broadcast: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -38,16 +44,20 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
 
     fn try_from(val: &slack::InternalEvent) -> std::result::Result<Self, Self::Error> {
         match val {
-            slack::InternalEvent::Message(slack::Message::BasicMessage(msg)) => Ok(Self {
-                user: msg.user.to_string(),
-                channel: msg.channel.to_string(),
-                text: msg.common.text.to_string(),
-                link: None,
+            slack::InternalEvent::Message(slack::Message::BasicMessage(msg)) => Ok({
+                Self {
+                    user: msg.user.to_string(),
+                    channel: msg.channel.to_string(),
+                    text: msg.common.text.to_string(),
+                    ts: String::from(&msg.common.ts),
+                    link: None,
+                }
             }),
             slack::InternalEvent::LinkShared(msg) => Ok(Self {
                 user: msg.user.to_string(),
                 channel: msg.channel.to_string(),
                 text: "".to_string(),
+                ts: msg.event_ts.clone(),
                 link: Some(msg.links[0].url.to_string()),
             }),
             _ => Err(ConvertMessageEventError::InvalidMessageType),
@@ -61,17 +71,30 @@ pub enum Message<'a> {
 }
 
 impl<'a> Message<'a> {
-    fn as_postmessage(&self, channel: &'a str) -> PostMessage<'a> {
+    fn as_postmessage(
+        &self,
+        channel: &'a str,
+        reply: Option<ReplyMessageEvent<'a>>,
+    ) -> PostMessage<'a> {
+        let (thread_ts, reply_broadcast) = match reply {
+            Some(reply) => (Some(reply.msg), Some(reply.broadcast)),
+            None => (None, None),
+        };
+
         match self {
             Message::Blocks(blocks) => slack::PostMessage {
                 channel,
                 text: None,
                 blocks: Some(blocks),
+                thread_ts,
+                reply_broadcast,
             },
             Message::Text(text) => slack::PostMessage {
                 channel,
                 text: Some(text),
                 blocks: None,
+                thread_ts,
+                reply_broadcast,
             },
         }
     }
@@ -82,7 +105,12 @@ pub trait Bot {
     fn bot_id(&self) -> &'_ str;
     fn bot_token(&self) -> &'_ str;
     fn openai_key(&self) -> &'_ str;
-    async fn send_message(&self, channel: &str, msg: Message<'_>) -> anyhow::Result<()>;
+    async fn send_message(
+        &self,
+        channel: &str,
+        msg: Message<'_>,
+        reply: Option<ReplyMessageEvent<'_>>,
+    ) -> anyhow::Result<()>;
     fn redis(&self) -> redis::Connection;
 }
 
@@ -108,14 +136,19 @@ impl Bot for DittoBot {
         &self.openai_key
     }
 
-    async fn send_message(&self, channel: &str, message: Message<'_>) -> anyhow::Result<()> {
+    async fn send_message(
+        &self,
+        channel: &str,
+        message: Message<'_>,
+        reply: Option<ReplyMessageEvent<'_>>,
+    ) -> anyhow::Result<()> {
         let builder = self
             .http_client
             .post("https://slack.com/api/chat.postMessage")
             .header("Content-type", "application/json; charset=utf-8")
             .header("Authorization", format!("Bearer {}", &self.bot_token));
 
-        let reply = message.as_postmessage(channel);
+        let reply = message.as_postmessage(channel, reply);
 
         let resp = builder
             .json(&reply)

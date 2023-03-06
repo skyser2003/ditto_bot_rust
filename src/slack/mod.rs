@@ -14,6 +14,12 @@ impl From<&StrTimeStamp> for SystemTime {
     }
 }
 
+impl From<&StrTimeStamp> for String {
+    fn from(val: &StrTimeStamp) -> Self {
+        val.0.clone()
+    }
+}
+
 impl Debug for StrTimeStamp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let t: SystemTime = self.into();
@@ -275,10 +281,18 @@ pub enum SlackEvent {
 #[derive(Debug, Clone, Serialize)]
 pub struct PostMessage<'a> {
     pub channel: &'a str,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<&'a str>, // alternative text when blocks are not given (or cannot be displayed).
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocks: Option<&'a [BlockElement]>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_ts: Option<&'a str>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_broadcast: Option<bool>,
     // pub as_user: Option<bool>,
 }
 

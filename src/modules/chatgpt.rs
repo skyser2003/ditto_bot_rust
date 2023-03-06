@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     slack::{BlockElement, SectionBlock},
-    Message,
+    Message, ReplyMessageEvent,
 };
 
 #[derive(Serialize)]
@@ -98,6 +98,11 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         .send()
         .await;
 
+    let reply_event = Some(ReplyMessageEvent {
+        msg: msg.ts.as_str(),
+        broadcast: true,
+    });
+
     if res_result.is_err() {
         let debug_str = "OpenAI API call failed";
         debug!("{}", debug_str);
@@ -106,6 +111,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
             .send_message(
                 &msg.channel,
                 Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(debug_str))]),
+                reply_event,
             )
             .await
             .and(Ok(()));
@@ -124,6 +130,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
             .send_message(
                 &msg.channel,
                 Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(&debug_str))]),
+                reply_event,
             )
             .await
             .and(Ok(()));
@@ -145,6 +152,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
             .send_message(
                 &msg.channel,
                 Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(&debug_str))]),
+                reply_event,
             )
             .await
             .and(Ok(()));
@@ -167,6 +175,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         .send_message(
             &msg.channel,
             Message::Blocks(&[gpt_name_block, gpt_answer_block]),
+            reply_event,
         )
         .await
         .and(Ok(()));

@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use std::sync::RwLock;
 
-use crate::Message;
+use crate::{Message, ReplyMessageEvent};
 
 pub enum MockMessage {
     Blocks(Vec<super::slack::BlockElement>),
@@ -49,14 +49,19 @@ impl super::Bot for MockBot {
         ""
     }
 
-    async fn send_message(&self, channel: &str, message: Message<'_>) -> anyhow::Result<()> {
+    async fn send_message(
+        &self,
+        channel: &str,
+        message: Message<'_>,
+        reply: Option<ReplyMessageEvent<'_>>,
+    ) -> anyhow::Result<()> {
         let mut messages = self
             .messages
             .write()
             .map_err(|e| anyhow!("write lock failed - {}", e))?;
         eprintln!(
             "{}",
-            serde_json::to_string_pretty(&message.as_postmessage(channel))?
+            serde_json::to_string_pretty(&message.as_postmessage(channel, reply))?
         );
         messages.push((channel.to_string(), message.into()));
 

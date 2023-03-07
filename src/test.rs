@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use std::sync::RwLock;
 
-use crate::{Message, ReplyMessageEvent};
+use crate::{slack::ConversationReplyResponse, Message, ReplyMessageEvent};
 
 pub enum MockMessage {
     Blocks(Vec<super::slack::BlockElement>),
@@ -53,7 +53,7 @@ impl super::Bot for MockBot {
         &self,
         channel: &str,
         message: Message<'_>,
-        reply: Option<ReplyMessageEvent<'_>>,
+        reply: Option<ReplyMessageEvent>,
     ) -> anyhow::Result<()> {
         let mut messages = self
             .messages
@@ -66,6 +66,14 @@ impl super::Bot for MockBot {
         messages.push((channel.to_string(), message.into()));
 
         Ok(())
+    }
+
+    async fn get_conversation_relies(
+        &self,
+        _channel: &str,
+        _ts: &str,
+    ) -> anyhow::Result<ConversationReplyResponse> {
+        Err(anyhow!("Not implemented!"))
     }
 
     fn redis(&self) -> redis::Connection {

@@ -126,6 +126,9 @@ pub enum BlockElement {
     Text {
         text: String,
     },
+    User {
+        user_id: String,
+    },
     Button(ButtonBlock),
     Section(SectionBlock),
     Actions(ActionBlock),
@@ -164,6 +167,7 @@ pub struct Icons {
 pub struct MessageCommon {
     pub text: String,
     pub ts: StrTimeStamp,
+    pub thread_ts: Option<StrTimeStamp>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -250,39 +254,64 @@ pub struct Member {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
 pub enum ThreadMessageType {
-    First(ThreadFirstMessage),
-    Rest(ThreadRestMessage),
+    Unbroadcasted(ThreadUnbroadcastedMessage),
+    Broadcasted(ThreadBroadcastedMessage),
+    None(ThreadNoneMessage),
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ThreadListResponse {
-    messags: Vec<ThreadMessageType>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ThreadFirstMessage {
-    #[serde(rename = "type")]
-    ty: String,
-    user: String,
-    text: String,
-    thread_ts: StrTimeStamp,
-    reply_count: i32,
-    ts: StrTimeStamp,
+pub struct ConversationReplyResponse {
+    pub ok: bool,
+    pub messages: Option<Vec<ThreadMessageType>>,
+    pub error: Option<String>,
+    pub has_more: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct ThreadRestMessage {
+pub struct ThreadUnbroadcastedMessage {
     #[serde(rename = "type")]
-    ty: String,
-    user: String,
-    text: String,
-    thread_ts: StrTimeStamp,
-    parent_user_id: String,
-    ts: StrTimeStamp,
+    pub ty: String,
+    pub client_msg_id: String,
+    pub text: String,
+    pub user: String,
+    pub ts: StrTimeStamp,
+    pub blocks: Vec<BlockElement>,
+    pub team: String,
+    pub thread_ts: Option<StrTimeStamp>,
+    pub parent_user_id: Option<String>,
+    pub reply_count: Option<i32>,
+    pub reply_users_count: Option<i32>,
+    pub latest_reply: Option<StrTimeStamp>,
+    pub reply_users: Option<Vec<String>>,
+    pub is_locked: Option<bool>,
+    pub subscribed: Option<bool>,
+    pub last_read: Option<StrTimeStamp>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ThreadBroadcastedMessage {
+    #[serde(rename = "type")]
+    pub ty: String,
+    pub client_msg_id: Option<String>,
+    pub subtype: Option<String>,
+    pub text: String,
+    pub bot_id: Option<String>,
+    pub user: Option<String>,
+    pub ts: StrTimeStamp,
+    pub thread_ts: StrTimeStamp,
+    pub root: ThreadUnbroadcastedMessage,
+    pub username: Option<String>,
+    pub app_id: Option<String>,
+    pub blocks: Vec<BlockElement>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ThreadNoneMessage {}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
@@ -324,7 +353,7 @@ pub struct PostMessage<'a> {
     pub blocks: Option<&'a [BlockElement]>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thread_ts: Option<&'a str>,
+    pub thread_ts: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_broadcast: Option<bool>,

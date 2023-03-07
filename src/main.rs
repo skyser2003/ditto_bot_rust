@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use anyhow::Context as _;
 use async_trait::async_trait;
 use axum::body::Body;
@@ -8,6 +9,7 @@ use axum::routing::MethodFilter;
 use axum::{AddExtensionLayer, Json};
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
+use slack::ConversationReplyResponse;
 use slack::PostMessage;
 use std::sync::Arc;
 use std::{
@@ -25,11 +27,12 @@ pub struct MessageEvent {
     channel: String,
     text: String,
     ts: String,
+    thread_ts: Option<String>,
     link: Option<String>,
 }
 
-pub struct ReplyMessageEvent<'a> {
-    msg: &'a str,
+pub struct ReplyMessageEvent {
+    msg: String,
     broadcast: bool,
 }
 
@@ -50,6 +53,11 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     channel: msg.channel.to_string(),
                     text: msg.common.text.to_string(),
                     ts: String::from(&msg.common.ts),
+                    thread_ts: if let Some(thread_ts) = msg.common.thread_ts.clone() {
+                        Some(String::from(&thread_ts))
+                    } else {
+                        None
+                    },
                     link: None,
                 }
             }),
@@ -58,6 +66,7 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                 channel: msg.channel.to_string(),
                 text: "".to_string(),
                 ts: msg.event_ts.clone(),
+                thread_ts: None, // TODO
                 link: Some(msg.links[0].url.to_string()),
             }),
             _ => Err(ConvertMessageEventError::InvalidMessageType),
@@ -74,7 +83,7 @@ impl<'a> Message<'a> {
     fn as_postmessage(
         &self,
         channel: &'a str,
-        reply: Option<ReplyMessageEvent<'a>>,
+        reply: Option<ReplyMessageEvent>,
     ) -> PostMessage<'a> {
         let (thread_ts, reply_broadcast) = match reply {
             Some(reply) => (Some(reply.msg), Some(reply.broadcast)),
@@ -109,8 +118,13 @@ pub trait Bot {
         &self,
         channel: &str,
         msg: Message<'_>,
-        reply: Option<ReplyMessageEvent<'_>>,
+        reply: Option<ReplyMessageEvent>,
     ) -> anyhow::Result<()>;
+    async fn get_conversation_relies(
+        &self,
+        channel: &str,
+        ts: &str,
+    ) -> anyhow::Result<ConversationReplyResponse>;
     fn redis(&self) -> redis::Connection;
 }
 
@@ -140,7 +154,7 @@ impl Bot for DittoBot {
         &self,
         channel: &str,
         message: Message<'_>,
-        reply: Option<ReplyMessageEvent<'_>>,
+        reply: Option<ReplyMessageEvent>,
     ) -> anyhow::Result<()> {
         let builder = self
             .http_client
@@ -160,6 +174,35 @@ impl Bot for DittoBot {
             resp.text().await.context("Failed to read body")?
         );
         Ok(())
+    }
+
+    async fn get_conversation_relies(
+        &self,
+        channel: &str,
+        ts: &str,
+    ) -> anyhow::Result<ConversationReplyResponse> {
+        let builder = self
+            .http_client
+            .get("https://slack.com/api/conversations.replies")
+            .header("Content-type", "application/json; charset=utf-8")
+            .header("Authorization", format!("Bearer {}", &self.bot_token))
+            .query(&[("channel", channel), ("ts", ts)]);
+
+        let res = builder.send().await.context("Failed to send request")?;
+
+        let body = res.text().await?;
+
+        let json_result = serde_json::from_str::<ConversationReplyResponse>(&body);
+
+        if json_result.is_ok() {
+            Ok(json_result.unwrap())
+        } else {
+            Err(anyhow!(
+                "Json parsing failed for conversations.replies: {:?} {}",
+                json_result.err(),
+                body
+            ))
+        }
     }
 
     fn redis(&self) -> redis::Connection {

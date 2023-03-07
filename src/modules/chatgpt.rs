@@ -2,17 +2,17 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    slack::{BlockElement, SectionBlock},
+    slack::{BlockElement, SectionBlock, ThreadMessageType},
     Message, ReplyMessageEvent,
 };
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct OpenAIChatCompletionMessage {
     role: String,
     content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct OpenAIChatCompletionBody {
     model: String,
     messages: Vec<OpenAIChatCompletionMessage>,
@@ -70,40 +70,113 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
     let call_type = slices[0];
 
-    if call_type != "gpt" && call_type != "chatgpt" {
+    if call_type != "gpt" {
         return Ok(());
     }
 
+    let call_prefix = format!("{} {} ", slack_bot_format, call_type);
+
     debug!("GPT: bot command full text = {:?}", &msg.text);
-    debug!("call_type: {:?}", call_type);
 
     let input_text = slices.iter().cloned().skip(1).collect::<Vec<_>>().join(" ");
 
-    let req_body = OpenAIChatCompletionBody {
-        model: "gpt-3.5-turbo".to_string(),
-        messages: vec![OpenAIChatCompletionMessage {
-            role: "user".to_string(),
-            content: input_text,
-        }],
-    };
-
-    let req_client = reqwest::Client::builder()
+    let openai_req = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0")
         .build()?;
 
-    let res_result = req_client
-        .post("https://api.openai.com/v1/chat/completions")
-        .bearer_auth(bot.openai_key())
-        .json(&req_body)
-        .send()
-        .await;
+    let thread_ts = if let Some(thread_ts) = msg.thread_ts.clone() {
+        thread_ts
+    } else {
+        msg.ts.clone()
+    };
+
+    let conv_fut = bot.get_conversation_relies(&msg.channel, thread_ts.as_str());
+
+    let conv_result = conv_fut.await;
+
+    let mut openai_body = OpenAIChatCompletionBody {
+        model: "gpt-3.5-turbo".to_string(),
+        messages: vec![],
+    };
+
+    if let Ok(conv_res) = conv_result {
+        if let Some(messages) = conv_res.messages {
+            messages.iter().for_each(|msg| {
+                let (role, mut content) = match msg {
+                    ThreadMessageType::Unbroadcasted(val) => ("user", val.text.clone()),
+                    ThreadMessageType::Broadcasted(val) => {
+                        if val.user.is_some() {
+                            ("user", val.text.clone())
+                        } else {
+                            let speaker = "assistant";
+
+                            if val.blocks.len() < 2 {
+                                return;
+                            }
+
+                            let mut text = val.text.clone();
+
+                            let mut is_valid_response = false;
+
+                            if let BlockElement::Section(section) = &val.blocks[0] {
+                                if section.text.text == "`ChatGPT`" {
+                                    if let BlockElement::Section(real_text_section) = &val.blocks[1]
+                                    {
+                                        text = real_text_section.text.text.clone();
+                                        is_valid_response = true;
+                                    }
+                                }
+                            }
+
+                            if !is_valid_response {
+                                return;
+                            }
+
+                            (speaker, text)
+                        }
+                    }
+                    ThreadMessageType::None(_) => return,
+                };
+
+                if role == "user" {
+                    let call_split = content.split(&call_prefix).collect::<Vec<_>>();
+
+                    if call_split.len() == 2 {
+                        content = call_split[1].to_string();
+                    }
+                }
+
+                let role = role.to_string();
+
+                openai_body
+                    .messages
+                    .push(OpenAIChatCompletionMessage { role, content });
+            });
+        }
+    };
+
+    if openai_body.messages.len() == 0 {
+        debug!("Error! no thread found");
+
+        openai_body.messages = vec![OpenAIChatCompletionMessage {
+            role: "user".to_string(),
+            content: input_text,
+        }];
+    }
 
     let reply_event = Some(ReplyMessageEvent {
-        msg: msg.ts.as_str(),
+        msg: thread_ts,
         broadcast: true,
     });
 
-    if res_result.is_err() {
+    let openai_res = openai_req
+        .post("https://api.openai.com/v1/chat/completions")
+        .bearer_auth(bot.openai_key())
+        .json(&openai_body)
+        .send()
+        .await;
+
+    if openai_res.is_err() {
         let debug_str = "OpenAI API call failed";
         debug!("{}", debug_str);
 
@@ -117,7 +190,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
             .and(Ok(()));
     }
 
-    let res = res_result.unwrap();
+    let res = openai_res.unwrap();
     let res_len = res.content_length().unwrap_or(0);
 
     let res_bytes = res.bytes().await;

@@ -169,7 +169,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     let res_text = res_text.trim_start();
 
     let gpt_name_block = BlockElement::Section(SectionBlock::new_markdown("`ChatGPT`"));
-    let gpt_answer_block = BlockElement::Section(SectionBlock::new_text(res_text));
+    let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(res_text));
 
     return bot
         .send_message(

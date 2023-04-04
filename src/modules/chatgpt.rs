@@ -231,7 +231,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                     if data == "[DONE]" {
                         debug!("OpenAI SSE received [DONE]");
 
-                        full_message += "[DONE]";
+                        full_message += " [DONE]";
 
                         send_gpt_edit_message(
                             bot,

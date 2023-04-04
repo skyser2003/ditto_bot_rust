@@ -10,7 +10,10 @@ use axum::{AddExtensionLayer, Json};
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
 use slack::ConversationReplyResponse;
+use slack::EditMessage;
+use slack::EditMessageResponse;
 use slack::PostMessage;
+use slack::PostMessageResponse;
 use std::sync::Arc;
 use std::{
     convert::{TryFrom, TryInto},
@@ -31,6 +34,7 @@ pub struct MessageEvent {
     link: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct ReplyMessageEvent {
     msg: String,
     broadcast: bool,
@@ -107,6 +111,23 @@ impl<'a> Message<'a> {
             },
         }
     }
+
+    fn as_editmessage(&self, channel: &'a str, ts: &'a str) -> EditMessage<'a> {
+        match self {
+            Message::Blocks(blocks) => EditMessage {
+                channel,
+                text: None,
+                blocks: Some(blocks),
+                ts: ts.to_string(),
+            },
+            Message::Text(text) => EditMessage {
+                channel,
+                text: Some(text),
+                blocks: None,
+                ts: ts.to_string(),
+            },
+        }
+    }
 }
 
 #[async_trait]
@@ -119,7 +140,15 @@ pub trait Bot {
         channel: &str,
         msg: Message<'_>,
         reply: Option<ReplyMessageEvent>,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<PostMessageResponse>;
+
+    async fn edit_message(
+        &self,
+        channel: &str,
+        msg: Message<'_>,
+        ts: &str,
+    ) -> anyhow::Result<EditMessageResponse>;
+
     async fn get_conversation_relies(
         &self,
         channel: &str,
@@ -155,7 +184,7 @@ impl Bot for DittoBot {
         channel: &str,
         message: Message<'_>,
         reply: Option<ReplyMessageEvent>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<PostMessageResponse> {
         let builder = self
             .http_client
             .post("https://slack.com/api/chat.postMessage")
@@ -169,11 +198,41 @@ impl Bot for DittoBot {
             .send()
             .await
             .context("Failed to send request")?;
-        debug!(
-            "Response from reply: {:?}",
-            resp.text().await.context("Failed to read body")?
-        );
-        Ok(())
+
+        let resp = resp
+            .json::<PostMessageResponse>()
+            .await
+            .context("Failed to parse response")?;
+
+        Ok(resp)
+    }
+
+    async fn edit_message(
+        &self,
+        channel: &str,
+        message: Message<'_>,
+        ts: &str,
+    ) -> anyhow::Result<EditMessageResponse> {
+        let builder = self
+            .http_client
+            .post("https://slack.com/api/chat.update")
+            .header("Content-type", "application/json; charset=utf-8")
+            .header("Authorization", format!("Bearer {}", &self.bot_token));
+
+        let body = message.as_editmessage(channel, ts);
+
+        let resp = builder
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to send request")?;
+
+        let resp = resp
+            .json::<EditMessageResponse>()
+            .await
+            .context("Failed to parse response")?;
+
+        Ok(resp)
     }
 
     async fn get_conversation_relies(

@@ -1,7 +1,10 @@
 use anyhow::anyhow;
 use std::sync::RwLock;
 
-use crate::{slack::ConversationReplyResponse, Message, ReplyMessageEvent};
+use crate::{
+    slack::{ConversationReplyResponse, EditMessageResponse, PostMessageResponse},
+    Message, ReplyMessageEvent,
+};
 
 pub enum MockMessage {
     Blocks(Vec<super::slack::BlockElement>),
@@ -54,18 +57,52 @@ impl super::Bot for MockBot {
         channel: &str,
         message: Message<'_>,
         reply: Option<ReplyMessageEvent>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<PostMessageResponse> {
         let mut messages = self
             .messages
             .write()
             .map_err(|e| anyhow!("write lock failed - {}", e))?;
+
         eprintln!(
             "{}",
             serde_json::to_string_pretty(&message.as_postmessage(channel, reply))?
         );
+
         messages.push((channel.to_string(), message.into()));
 
-        Ok(())
+        Ok(PostMessageResponse {
+            ok: true,
+            channel: None,
+            error: None,
+            ts: None,
+        })
+    }
+
+    async fn edit_message(
+        &self,
+        channel: &str,
+        message: Message<'_>,
+        ts: &str,
+    ) -> anyhow::Result<EditMessageResponse> {
+        let mut messages = self
+            .messages
+            .write()
+            .map_err(|e| anyhow!("write lock failed - {}", e))?;
+
+        eprintln!(
+            "{} {}",
+            serde_json::to_string_pretty(&message.as_postmessage(channel, None))?,
+            ts
+        );
+
+        messages.push((channel.to_string(), message.into()));
+
+        Ok(EditMessageResponse {
+            ok: true,
+            channel: None,
+            error: None,
+            ts: None,
+        })
     }
 
     async fn get_conversation_relies(

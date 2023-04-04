@@ -311,6 +311,24 @@ pub struct ThreadBroadcastedMessage {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub struct PostMessageResponse {
+    pub ok: bool,
+    pub channel: Option<String>,
+    pub ts: Option<StrTimeStamp>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct EditMessageResponse {
+    pub ok: bool,
+    pub channel: Option<String>,
+    pub ts: Option<StrTimeStamp>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ThreadNoneMessage {}
 
 #[derive(Debug, Clone, Deserialize)]
@@ -358,6 +376,19 @@ pub struct PostMessage<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_broadcast: Option<bool>,
     // pub as_user: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EditMessage<'a> {
+    pub channel: &'a str,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<&'a str>, // alternative text when blocks are not given (or cannot be displayed).
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocks: Option<&'a [BlockElement]>,
+
+    pub ts: String,
 }
 
 impl SectionBlock {

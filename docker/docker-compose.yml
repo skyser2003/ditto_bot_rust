@@ -13,6 +13,7 @@ services:
       - RUST_LOG=$RUST_LOG
       - BOT_ID=$BOT_ID
       - OPENAI_KEY=$OPENAI_KEY
+      - USE_GPT_STREAM=$USE_GPT_STREAM
     ports:
       - 2525:8082
   redis:

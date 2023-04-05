@@ -286,6 +286,10 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                         let diff_message = message_opt.unwrap();
                         full_message += &diff_message;
 
+                        if ![",", ".", "?", "!", "\n"].contains(&diff_message.as_str()) {
+                            continue;
+                        }
+
                         send_gpt_edit_message(
                             bot,
                             &full_message,

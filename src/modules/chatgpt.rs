@@ -1,4 +1,4 @@
-use std::env;
+use std::{borrow::Cow, env};
 
 use futures::StreamExt;
 use log::debug;
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     slack::{BlockElement, PostMessageResponse, SectionBlock, ThreadMessageType},
-    Message, ReplyMessageEvent,
+    Bot, Message, ReplyMessageEvent,
 };
 
 #[derive(Debug, Serialize)]
@@ -80,7 +80,7 @@ struct ResMessage {
     content: String,
 }
 
-pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
+pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     let slack_bot_format = format!("<@{}>", bot.bot_id());
     let is_bot_command = msg.text.contains(&slack_bot_format);
 
@@ -214,11 +214,10 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         .json(&openai_body);
 
     if stream_mode {
+        let mut gpt_message = GptMessageManager::new(&msg.channel, reply_event.clone());
+        let mut initial_received = false;
+
         let mut openai_sse = EventSource::new(openai_builder.try_clone().unwrap())?;
-
-        let mut message_ts = None;
-
-        let mut full_message = String::new();
 
         while let Some(event) = openai_sse.next().await {
             match event {
@@ -229,17 +228,15 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                     let data = event.data;
 
                     if data == "[DONE]" {
-                        debug!("OpenAI SSE received [DONE]");
+                        debug!("OpenAI SSE received {}", data);
 
-                        full_message += " [DONE]";
+                        gpt_message.concat_message(&format!(" `{}`", data));
 
-                        gpt_edit_message(
-                            bot,
-                            &full_message,
-                            &msg.channel,
-                            &String::from(&message_ts.clone().unwrap()),
-                        )
-                        .await;
+                        let sent = gpt_message.stream_message(bot, None).await;
+
+                        if sent.is_err() {
+                            debug!("OpenAI SSE stream {} sending failed: {:?}", data, sent);
+                        }
 
                         break;
                     }
@@ -258,39 +255,34 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
                         continue;
                     }
 
-                    if message_ts == None {
-                        full_message = message_opt.unwrap();
+                    let diff_message = message_opt.unwrap();
 
-                        let sent =
-                            gpt_send_message(bot, &full_message, &msg.channel, reply_event.clone())
-                                .await;
+                    if !initial_received {
+                        initial_received = true;
 
-                        if sent.is_err() {
-                            debug!("OpenAI SSE stream message sending failed: {:?}", sent);
-
-                            return Ok(());
+                        match gpt_message
+                            .stream_message(bot, Some("`Receiving...`"))
+                            .await
+                        {
+                            Ok(_) => {}
+                            Err(e) => {
+                                debug!("OpenAI SSE stream message sending failed: {:?}", e);
+                            }
                         }
+                    }
 
-                        message_ts = sent.unwrap().ts;
-                    } else {
-                        if message_opt.is_none() {
-                            continue;
-                        }
+                    gpt_message.concat_message(&diff_message);
 
-                        let diff_message = message_opt.unwrap();
-                        full_message += &diff_message;
+                    if ![",", ".", "?", "!", "\n"].contains(&diff_message.as_str()) {
+                        continue;
+                    }
 
-                        if ![",", ".", "?", "!", "\n"].contains(&diff_message.as_str()) {
-                            continue;
-                        }
+                    let sent = gpt_message.stream_message(bot, Some(" `[continue]`")).await;
 
-                        gpt_edit_message(
-                            bot,
-                            &full_message,
-                            &msg.channel,
-                            &String::from(&message_ts.clone().unwrap()),
-                        )
-                        .await;
+                    if sent.is_err() {
+                        debug!("OpenAI SSE stream message sending failed: {:?}", sent);
+
+                        return Ok(());
                     }
                 }
                 Err(e) => {
@@ -369,38 +361,113 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
         let res_text = res_text.trim_start();
 
-        return gpt_send_message(bot, &res_text, &msg.channel, reply_event)
+        GptMessageManager::send_message_static(bot, &res_text, &msg.channel, &reply_event)
             .await
-            .and(Ok(()));
+            .and(Ok(()))
     }
 }
 
-async fn gpt_send_message<B: crate::Bot>(
-    bot: &B,
-    message: &str,
-    channel: &str,
+// TODO save bot as member?
+struct GptMessageManager<'a> {
+    channel: &'a String,
+    ts: String,
     reply_event: Option<ReplyMessageEvent>,
-) -> anyhow::Result<PostMessageResponse> {
-    let gpt_name_block = BlockElement::Section(SectionBlock::new_markdown("`ChatGPT`"));
-    let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(&message));
-
-    let blocks = [gpt_name_block, gpt_answer_block];
-
-    bot.send_message(channel, Message::Blocks(&blocks), reply_event)
-        .await
+    message: String,
 }
 
-async fn gpt_edit_message<B: crate::Bot>(bot: &B, message: &str, channel: &str, ts: &str) {
-    let gpt_name_block = BlockElement::Section(SectionBlock::new_markdown("`ChatGPT`"));
-    let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(&message));
+impl<'a> GptMessageManager<'a> {
+    pub fn new(channel: &'a String, reply_event: Option<ReplyMessageEvent>) -> Self {
+        Self {
+            channel,
+            message: String::new(),
+            ts: String::new(),
+            reply_event,
+        }
+    }
 
-    let blocks = [gpt_name_block, gpt_answer_block];
+    pub fn concat_message(&mut self, diff_message: &String) {
+        self.message += diff_message;
+    }
 
-    let sent = bot
-        .edit_message(channel, Message::Blocks(&blocks), ts)
-        .await;
+    pub async fn stream_message(
+        &mut self,
+        bot: &impl Bot,
+        temp_message: Option<&str>,
+    ) -> anyhow::Result<()> {
+        let mut message = Cow::from(&self.message);
 
-    if sent.is_err() {
-        debug!("Edit message failed: {:?}", sent.err());
+        match temp_message {
+            Some(temp_message) => message += temp_message,
+            None => {}
+        }
+
+        if !self.ts.is_empty() {
+            return self
+                .edit_message(bot, &message, self.channel, &self.ts)
+                .await;
+        } else {
+            let sent = self
+                .send_message(bot, &message, self.channel, &self.reply_event)
+                .await;
+
+            if sent.is_err() {
+                return Err(sent.err().unwrap());
+            }
+
+            self.ts = String::from(&sent.unwrap().ts.unwrap());
+
+            Ok(())
+        }
+    }
+
+    pub async fn send_message_static(
+        bot: &impl Bot,
+        message: &str,
+        channel: &str,
+        reply_event: &Option<ReplyMessageEvent>,
+    ) -> anyhow::Result<PostMessageResponse> {
+        let gpt_name_block = BlockElement::Section(SectionBlock::new_markdown("`ChatGPT`"));
+        let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(&message));
+
+        let blocks = [gpt_name_block, gpt_answer_block];
+
+        let sent = bot
+            .send_message(channel, Message::Blocks(&blocks), reply_event.clone())
+            .await;
+
+        sent
+    }
+
+    async fn send_message(
+        &self,
+        bot: &impl Bot,
+        message: &str,
+        channel: &str,
+        reply_event: &Option<ReplyMessageEvent>,
+    ) -> anyhow::Result<PostMessageResponse> {
+        Self::send_message_static(bot, message, channel, reply_event).await
+    }
+
+    async fn edit_message(
+        &self,
+        bot: &impl Bot,
+        message: &str,
+        channel: &str,
+        ts: &str,
+    ) -> anyhow::Result<()> {
+        let gpt_name_block = BlockElement::Section(SectionBlock::new_markdown("`ChatGPT`"));
+        let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(&message));
+
+        let blocks = [gpt_name_block, gpt_answer_block];
+
+        let sent = bot
+            .edit_message(channel, Message::Blocks(&blocks), ts)
+            .await;
+
+        if sent.is_err() {
+            debug!("Edit message failed: {:?}", sent.err());
+        }
+
+        Ok(())
     }
 }

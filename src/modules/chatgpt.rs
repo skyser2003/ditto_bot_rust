@@ -20,6 +20,7 @@ struct OpenAIChatCompletionMessage {
 struct OpenAIChatCompletionBody {
     model: String,
     messages: Vec<OpenAIChatCompletionMessage>,
+    temperature: f32,
     stream: bool,
 }
 
@@ -98,9 +99,13 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     let call_type = slices[0];
 
-    if call_type != "gpt" {
+    let gpt_split = call_type.split("gpt").collect::<Vec<_>>();
+
+    if gpt_split[0] != "" {
         return Ok(());
     }
+
+    let temperature = gpt_split[1].parse::<f32>().unwrap_or(1.0);
 
     let call_prefix = format!("{} {} ", slack_bot_format, call_type);
 
@@ -133,6 +138,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     let mut openai_body = OpenAIChatCompletionBody {
         model: "gpt-3.5-turbo".to_string(),
         messages: vec![],
+        temperature,
         stream: stream_mode,
     };
 

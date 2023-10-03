@@ -1,6 +1,6 @@
 ARG TARGETARCH
 
-FROM rust:1.57-alpine AS builder
+FROM rust:1.72-alpine AS builder
 
 WORKDIR /ws
 

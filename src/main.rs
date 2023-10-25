@@ -26,6 +26,7 @@ mod slack;
 pub mod test;
 
 pub struct MessageEvent {
+    is_bot: bool,
     user: String,
     channel: String,
     text: String,
@@ -76,7 +77,11 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
 
                 if let Some(link) = link_url {
                     Ok(Self {
-                        user: msg.user.to_string(),
+                        is_bot: msg.bot_id.is_some(),
+                        user: msg
+                            .user
+                            .clone()
+                            .unwrap_or(msg.bot_id.clone().unwrap_or_default()),
                         channel: msg.channel.to_string(),
                         text: "".to_string(),
                         ts: msg.event_ts.clone(),
@@ -86,7 +91,11 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                 } else {
                     Ok({
                         Self {
-                            user: msg.user.to_string(),
+                            is_bot: msg.bot_id.is_some(),
+                            user: msg
+                                .user
+                                .clone()
+                                .unwrap_or(msg.bot_id.clone().unwrap_or_default()),
                             channel: msg.channel.to_string(),
                             text: msg.common.text.to_string(),
                             ts: String::from(&msg.common.ts),
@@ -102,6 +111,7 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
             }
             // No more used, just left for reference
             slack::InternalEvent::LinkShared(msg) => Ok(Self {
+                is_bot: false,
                 user: msg.user.to_string(),
                 channel: msg.channel.to_string(),
                 text: "".to_string(),
@@ -314,8 +324,8 @@ impl Bot for DittoBot {
 
 impl DittoBot {
     async fn slack_event_handler(&self, msg: MessageEvent) -> anyhow::Result<()> {
-        if msg.user.contains(&self.bot_id) {
-            debug!("Bot id is in user: {:?}, {:?}", msg.user, self.bot_id);
+        if msg.is_bot || msg.user.contains(&self.bot_id) {
+            debug!("Ignoring bot message");
             return Ok(());
         }
 

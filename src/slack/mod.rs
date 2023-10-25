@@ -181,17 +181,11 @@ pub struct BasicMessage {
     #[serde(flatten)]
     pub common: MessageCommon,
     pub channel: String,
-    pub user: String,
+    pub user: Option<String>,
+    pub bot_id: Option<String>,
     pub edited: Option<Edited>,
     pub event_ts: String,
     pub blocks: Vec<Block>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct BotMessage {
-    #[serde(flatten)]
-    pub common: MessageCommon,
-    pub bot_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -221,7 +215,6 @@ pub struct LinkSharedMessage {
 #[serde(tag = "subtype")]
 #[serde(rename_all = "snake_case")]
 pub enum TaggedMessage {
-    BotMessage(BotMessage),
     ChannelJoin(ChannelJoinMessage),
 }
 

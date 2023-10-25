@@ -6,6 +6,10 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
+    let mut conn = bot.redis();
+
+    let _ = increase_chat_count(&mut conn, &msg.user);
+
     let slack_bot_format = format!("<@{}>", bot.bot_id());
     let is_bot_command = msg.text.contains(&slack_bot_format);
 
@@ -20,8 +24,6 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     if slices.is_empty() {
         return Ok(());
     }
-
-    let mut conn = bot.redis();
 
     let call_type = slices[0];
 
@@ -115,13 +117,17 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
             )
             .await
             .and(Ok(()));
-    } else {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let score = now.as_millis();
-        let member = format!("{}:{}", score, &msg.user);
-
-        conn.zadd("ditto-archive", member, score as i64)?;
     }
+
+    Ok(())
+}
+
+fn increase_chat_count(conn: &mut redis::Connection, user_id: &str) -> anyhow::Result<()> {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let score = now.as_millis();
+    let member = format!("{}:{}", score, user_id);
+
+    conn.zadd("ditto-archive", member, score as i64)?;
 
     Ok(())
 }

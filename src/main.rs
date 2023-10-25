@@ -6,7 +6,7 @@ use axum::extract::Extension;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::MethodFilter;
-use axum::{AddExtensionLayer, Json};
+use axum::Json;
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
 use slack::ConversationReplyResponse;
@@ -311,8 +311,8 @@ impl IntoResponse for HttpResponse {
 }
 
 async fn http_handler<'a>(
-    Json(event): Json<slack::SlackEvent>,
     Extension(bot): Extension<Arc<DittoBot>>,
+    Json(event): Json<slack::SlackEvent>,
 ) -> HttpResponse {
     debug!("Parsed Event: {:?}", event);
 
@@ -358,7 +358,7 @@ async fn main() -> anyhow::Result<()> {
         "/",
         axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
     );
-    let app = app.layer(AddExtensionLayer::new(Arc::new(DittoBot {
+    let app = app.layer(Extension(Arc::new(DittoBot {
         bot_id,
         bot_token,
         openai_key,

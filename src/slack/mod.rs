@@ -112,6 +112,11 @@ pub struct ImageBlock {
     pub block_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkBlock {
+    pub url: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
@@ -133,6 +138,7 @@ pub enum BlockElement {
     Section(SectionBlock),
     Actions(ActionBlock),
     Image(ImageBlock),
+    Link(LinkBlock),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -177,6 +183,8 @@ pub struct BasicMessage {
     pub channel: String,
     pub user: String,
     pub edited: Option<Edited>,
+    pub event_ts: String,
+    pub blocks: Vec<Block>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -199,6 +207,7 @@ pub struct LinksItem {
     pub domain: String,
 }
 
+// No more used, just left for reference
 #[derive(Debug, Clone, Deserialize)]
 pub struct LinkSharedMessage {
     pub user: String,
@@ -376,6 +385,8 @@ pub struct PostMessage<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_broadcast: Option<bool>,
     // pub as_user: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unfurl_links: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

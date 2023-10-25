@@ -57,6 +57,7 @@ impl super::Bot for MockBot {
         channel: &str,
         message: Message<'_>,
         reply: Option<ReplyMessageEvent>,
+        unfurl_links: Option<bool>,
     ) -> anyhow::Result<PostMessageResponse> {
         let mut messages = self
             .messages
@@ -65,7 +66,7 @@ impl super::Bot for MockBot {
 
         eprintln!(
             "{}",
-            serde_json::to_string_pretty(&message.as_postmessage(channel, reply))?
+            serde_json::to_string_pretty(&message.as_postmessage(channel, reply, unfurl_links))?
         );
 
         messages.push((channel.to_string(), message.into()));
@@ -91,7 +92,7 @@ impl super::Bot for MockBot {
 
         eprintln!(
             "{} {}",
-            serde_json::to_string_pretty(&message.as_postmessage(channel, None))?,
+            serde_json::to_string_pretty(&message.as_postmessage(channel, None, Some(false)))?,
             ts
         );
 

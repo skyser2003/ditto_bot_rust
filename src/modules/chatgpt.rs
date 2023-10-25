@@ -311,6 +311,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                     &msg.channel,
                     Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(debug_str))]),
                     reply_event,
+                    None,
                 )
                 .await
                 .and(Ok(()));
@@ -330,6 +331,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                     &msg.channel,
                     Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(&debug_str))]),
                     reply_event,
+                    None,
                 )
                 .await
                 .and(Ok(()));
@@ -352,6 +354,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                     &msg.channel,
                     Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(&debug_str))]),
                     reply_event,
+                    None,
                 )
                 .await
                 .and(Ok(()));
@@ -438,7 +441,7 @@ impl<'a> GptMessageManager<'a> {
         let blocks = [gpt_name_block, gpt_answer_block];
 
         let sent = bot
-            .send_message(channel, Message::Blocks(&blocks), reply_event.clone())
+            .send_message(channel, Message::Blocks(&blocks), reply_event.clone(), None)
             .await;
 
         sent

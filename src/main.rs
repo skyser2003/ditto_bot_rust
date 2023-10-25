@@ -51,26 +51,62 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
 
     fn try_from(val: &slack::InternalEvent) -> std::result::Result<Self, Self::Error> {
         match val {
-            slack::InternalEvent::Message(slack::Message::BasicMessage(msg)) => Ok({
-                Self {
-                    user: msg.user.to_string(),
-                    channel: msg.channel.to_string(),
-                    text: msg.common.text.to_string(),
-                    ts: String::from(&msg.common.ts),
-                    thread_ts: if let Some(thread_ts) = msg.common.thread_ts.clone() {
-                        Some(String::from(&thread_ts))
-                    } else {
-                        None
-                    },
-                    link: None,
+            slack::InternalEvent::Message(slack::Message::BasicMessage(msg)) => {
+                let mut link_url: Option<&String> = None;
+
+                msg.blocks.iter().any(|block| {
+                    block.elements.iter().any(|element| match element {
+                        slack::BlockElement::Link(link_block) => {
+                            link_url = Some(&link_block.url);
+                            true
+                        }
+                        slack::BlockElement::RichTextSection { elements } => {
+                            elements.iter().any(|element| match element {
+                                slack::BlockElement::Link(link_block) => {
+                                    link_url = Some(&link_block.url);
+
+                                    true
+                                }
+                                _ => false,
+                            })
+                        }
+                        _ => false,
+                    })
+                });
+
+                if let Some(link) = link_url {
+                    Ok(Self {
+                        user: msg.user.to_string(),
+                        channel: msg.channel.to_string(),
+                        text: "".to_string(),
+                        ts: msg.event_ts.clone(),
+                        thread_ts: None, // TODO
+                        link: Some(link.to_string()),
+                    })
+                } else {
+                    Ok({
+                        Self {
+                            user: msg.user.to_string(),
+                            channel: msg.channel.to_string(),
+                            text: msg.common.text.to_string(),
+                            ts: String::from(&msg.common.ts),
+                            thread_ts: if let Some(thread_ts) = msg.common.thread_ts.clone() {
+                                Some(String::from(&thread_ts))
+                            } else {
+                                None
+                            },
+                            link: None,
+                        }
+                    })
                 }
-            }),
+            }
+            // No more used, just left for reference
             slack::InternalEvent::LinkShared(msg) => Ok(Self {
                 user: msg.user.to_string(),
                 channel: msg.channel.to_string(),
                 text: "".to_string(),
                 ts: msg.event_ts.clone(),
-                thread_ts: None, // TODO
+                thread_ts: None,
                 link: Some(msg.links[0].url.to_string()),
             }),
             _ => Err(ConvertMessageEventError::InvalidMessageType),
@@ -88,6 +124,7 @@ impl<'a> Message<'a> {
         &self,
         channel: &'a str,
         reply: Option<ReplyMessageEvent>,
+        unfurl_links: Option<bool>,
     ) -> PostMessage<'a> {
         let (thread_ts, reply_broadcast) = match reply {
             Some(reply) => (Some(reply.msg), Some(reply.broadcast)),
@@ -101,6 +138,7 @@ impl<'a> Message<'a> {
                 blocks: Some(blocks),
                 thread_ts,
                 reply_broadcast,
+                unfurl_links,
             },
             Message::Text(text) => slack::PostMessage {
                 channel,
@@ -108,6 +146,7 @@ impl<'a> Message<'a> {
                 blocks: None,
                 thread_ts,
                 reply_broadcast,
+                unfurl_links,
             },
         }
     }
@@ -140,6 +179,7 @@ pub trait Bot {
         channel: &str,
         msg: Message<'_>,
         reply: Option<ReplyMessageEvent>,
+        unfurl_links: Option<bool>,
     ) -> anyhow::Result<PostMessageResponse>;
 
     async fn edit_message(
@@ -184,6 +224,7 @@ impl Bot for DittoBot {
         channel: &str,
         message: Message<'_>,
         reply: Option<ReplyMessageEvent>,
+        unfurl_links: Option<bool>,
     ) -> anyhow::Result<PostMessageResponse> {
         let builder = self
             .http_client
@@ -191,7 +232,7 @@ impl Bot for DittoBot {
             .header("Content-type", "application/json; charset=utf-8")
             .header("Authorization", format!("Bearer {}", &self.bot_token));
 
-        let reply = message.as_postmessage(channel, reply);
+        let reply = message.as_postmessage(channel, reply, unfurl_links);
 
         let resp = builder
             .json(&reply)

@@ -8,7 +8,9 @@ pub fn test_deserialize_basic_message() {
         "channel": "C2147483705",
         "user": "U2147483697",
         "text": "Hello world",
-        "ts": "1355517523.000005"
+        "ts": "1355517523.000005",
+        "event_ts": "1355517523.000005",
+        "blocks": []
     }"#,
     )
     .unwrap();
@@ -22,7 +24,9 @@ pub fn test_deserialize_unicode_basic_message() {
         "channel": "C2147483705",
         "user": "U2147483697",
         "text": "\uadf8\uc544\uc544",
-        "ts": "1355517523.000005"
+        "ts": "1355517523.000005",
+        "event_ts": "1355517523.000005",
+        "blocks": []
     }"#,
     )
     .unwrap();
@@ -59,8 +63,11 @@ pub fn test_deserialize_bot_message() {
     serde_json::from_str::<Message>(
         r#"{
         "type": "message",
+        "channel": "ASDF1234",
         "subtype": "bot_message",
         "ts": "1358877455.000010",
+        "event_ts": "1358877455.000010",
+        "blocks": [],
         "text": "Pushing is the answer",
         "bot_id": "BB12033",
         "username": "github",
@@ -78,6 +85,8 @@ pub fn test_deserialize_normal_message() {
         "ts": "1358877455.000010",
         "channel": "aaaa",
         "text": "Pushing is the answer",
+        "event_ts": "1358877455.000010",
+        "blocks": [],
         "user": "github"
     }"#,
     )

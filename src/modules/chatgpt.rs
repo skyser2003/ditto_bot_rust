@@ -135,8 +135,10 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         false
     };
 
+    let openai_model = env::var("OPENAI_MODEL").unwrap_or("gpt-4".to_string());
+
     let mut openai_body = OpenAIChatCompletionBody {
-        model: "gpt-4".to_string(),
+        model: openai_model,
         messages: vec![],
         temperature,
         stream: stream_mode,

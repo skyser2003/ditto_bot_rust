@@ -1,13 +1,13 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use axum::{
+    body::Body,
     body::BoxBody,
     http::{Request, Response, StatusCode},
 };
 use bytes::Buf;
 use futures::future::BoxFuture;
 use hmac::Mac;
-use hyper::Body;
 use log::{debug, error};
 
 struct ByteBuf<'a>(&'a [u8]);

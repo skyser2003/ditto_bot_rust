@@ -1,14 +1,14 @@
 ARG TARGETARCH
 
-FROM rust:1.72-alpine AS builder
+FROM rust:1.74-alpine AS builder
 
 WORKDIR /ws
 
 RUN apk add --no-cache \
-    musl-dev \
-    curl \
-    ca-certificates \
-    openssl-dev
+  musl-dev \
+  curl \
+  ca-certificates \
+  openssl-dev
 
 ARG TARGETARCH
 ARG BUILDARCH
@@ -17,29 +17,29 @@ ARG BUILDARCH
 # Use workaround
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
   echo -n "aarch64" > TARGETARCH; \
-else \
+  else \
   echo -n ${TARGETARCH} > TARGETARCH; \
-fi; \
-if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then \
+  fi; \
+  if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then \
   echo -n "native" > BUILD_MODE; \
-else \
+  else \
   echo -n "cross" > BUILD_MODE; \
-fi;
+  fi;
 
 # install musl target
 RUN rustup target add $(cat TARGETARCH)-unknown-linux-musl
 # install musl compiler
 RUN curl https://musl.cc/$(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz -o $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
-    tar -xzf $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
-    rm $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
-    mv $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE) /gcc-musl
+  tar -xzf $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
+  rm $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
+  mv $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE) /gcc-musl
 ENV PATH=${PATH}:/gcc-musl/bin
 
 RUN mkdir .cargo && \
   echo -e "[target.$(cat TARGETARCH)-unknown-linux-musl]\n\
-linker = \"$(cat TARGETARCH)-linux-musl-gcc\"\n\
-ar = \"$(cat TARGETARCH)-linux-musl-ar\"\n\
-rustflags = [\"-Ctarget-feature=+crt-static\"]" > .cargo/config
+  linker = \"$(cat TARGETARCH)-linux-musl-gcc\"\n\
+  ar = \"$(cat TARGETARCH)-linux-musl-ar\"\n\
+  rustflags = [\"-Ctarget-feature=+crt-static\"]" > .cargo/config
 
 # begin build
 ADD Cargo.toml ./

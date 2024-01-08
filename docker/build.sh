@@ -6,4 +6,4 @@ DOCKER_BUILDKIT=1 docker compose build --pull --parallel --build-arg TARGETARCH=
 echo "======== build image inspect"
 docker image inspect registry.skyser.kr/shipduck/ditto_bot_rust
 echo "======== push image"
-docker-compose push
+docker compose push

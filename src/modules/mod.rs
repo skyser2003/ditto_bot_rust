@@ -1,4 +1,5 @@
 pub mod chatgpt;
+pub mod gemini;
 pub mod mhw;
 pub mod namuwiki;
 pub mod surplus;
@@ -32,7 +33,8 @@ pub async fn invoke_all_modules<B: super::Bot>(bot: &B, message: crate::MessageE
             mhw::handle,
             namuwiki::handle,
             chatgpt::handle,
-            twitter::handle
+            twitter::handle,
+            gemini::handle
         ]
     );
 }

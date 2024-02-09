@@ -52,6 +52,10 @@ impl super::Bot for MockBot {
         ""
     }
 
+    fn gemini_key(&self) -> &str {
+        ""
+    }
+
     async fn send_message(
         &self,
         channel: &str,

@@ -184,6 +184,8 @@ pub trait Bot {
     fn bot_id(&self) -> &'_ str;
     fn bot_token(&self) -> &'_ str;
     fn openai_key(&self) -> &'_ str;
+    fn gemini_key(&self) -> &'_ str;
+
     async fn send_message(
         &self,
         channel: &str,
@@ -211,6 +213,7 @@ struct DittoBot {
     bot_id: String,
     bot_token: String,
     openai_key: String,
+    gemini_key: String,
     http_client: reqwest::Client,
     redis_client: redis::Client,
 }
@@ -227,6 +230,10 @@ impl Bot for DittoBot {
 
     fn openai_key(&self) -> &'_ str {
         &self.openai_key
+    }
+
+    fn gemini_key(&self) -> &'_ str {
+        &self.gemini_key
     }
 
     async fn send_message(
@@ -403,7 +410,10 @@ async fn main() -> anyhow::Result<()> {
     info!("Redis address: {:?}", redis_address);
 
     let openai_key = env::var("OPENAI_KEY").context("OpenAI key is not given")?;
-    info!("Open AI Key: {:?}", openai_key);
+    info!("OpenAI Key: {:?}", openai_key);
+
+    let gemini_key = env::var("GEMINI_KEY").context("Gemini key is not given")?;
+    info!("Gemini Key: {:?}", gemini_key);
 
     let app = axum::Router::new().route(
         "/",
@@ -413,6 +423,7 @@ async fn main() -> anyhow::Result<()> {
         bot_id,
         bot_token,
         openai_key,
+        gemini_key,
         http_client: reqwest::Client::new(),
         redis_client: redis::Client::open(format!("redis://{}", redis_address))
             .context("Failed to create redis client")?,

@@ -59,8 +59,11 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Build & Push
+      - name: Build
         run: docker/build.sh
+
+      - name: Push
+        run: docker/push.sh
 
       - name: Publish
         if: ${{ github.event_name == 'push' }}

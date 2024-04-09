@@ -140,7 +140,7 @@ fn generate_bar(chat_count: i32, largest_count: i32, level: usize) -> String {
     let characters = ["", "▌", "█"];
     let steps = max(min(level, characters.len() - 1), 1);
 
-    let n = 20 * (chat_count as f32 / largest_count as f32).ceil() as i32;
+    let n = (20.0 * (chat_count as f32 / largest_count as f32)).ceil() as i32;
     let graph_char = characters[steps];
 
     let length = n / steps as i32;

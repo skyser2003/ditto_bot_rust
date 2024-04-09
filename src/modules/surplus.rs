@@ -85,14 +85,16 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
             .await
             .unwrap_or_else(|_| HashMap::<String, String>::new());
 
+        let largest_count = vec_table.iter().map(|pair| pair.1).max().unwrap_or(0);
+
         let mut vec_bar = Vec::<String>::new();
 
         for pair in vec_table {
             let user_name = user_name_map.get(pair.0).unwrap_or(pair.0);
             let user_bar = format!(
-                "*{:}:*\n\t{:} {:}",
+                "*`{:}`:*\n\t{:} {:}",
                 user_name,
-                generate_bar(pair.1, 2),
+                generate_bar(pair.1, largest_count, 2),
                 pair.1
             );
 
@@ -134,11 +136,11 @@ fn increase_chat_count(conn: &mut redis::Connection, user_id: &str) -> anyhow::R
     Ok(())
 }
 
-fn generate_bar(chat_count: i32, level: usize) -> String {
+fn generate_bar(chat_count: i32, largest_count: i32, level: usize) -> String {
     let characters = ["", "▌", "█"];
     let steps = max(min(level, characters.len() - 1), 1);
 
-    let n = ((chat_count / 1000) as f32).round() as i32;
+    let n = 20 * (chat_count as f32 / largest_count as f32).ceil() as i32;
     let graph_char = characters[steps];
 
     let length = n / steps as i32;

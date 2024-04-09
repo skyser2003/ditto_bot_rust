@@ -101,7 +101,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         return Ok(());
     }
 
-    let temperature = gemini_split[1].parse::<f32>().unwrap_or(1.0);
+    let temperature = gemini_split[1].parse::<f32>().unwrap_or(0.0);
 
     let call_prefix = format!("{} {} ", slack_bot_format, call_type);
 

@@ -109,16 +109,6 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     })
                 }
             }
-            // No more used, just left for reference
-            slack::InternalEvent::LinkShared(msg) => Ok(Self {
-                is_bot: false,
-                user: msg.user.to_string(),
-                channel: msg.channel.to_string(),
-                text: "".to_string(),
-                ts: msg.event_ts.clone(),
-                thread_ts: None,
-                link: Some(msg.links[0].url.to_string()),
-            }),
             _ => Err(ConvertMessageEventError::InvalidMessageType),
         }
     }

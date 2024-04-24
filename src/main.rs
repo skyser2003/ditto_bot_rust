@@ -75,39 +75,28 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     })
                 });
 
-                if let Some(link) = link_url {
-                    Ok(Self {
-                        is_bot: msg.bot_id.is_some(),
-                        user: msg
-                            .user
-                            .clone()
-                            .unwrap_or(msg.bot_id.clone().unwrap_or_default()),
-                        channel: msg.channel.to_string(),
-                        text: "".to_string(),
-                        ts: msg.event_ts.clone(),
-                        thread_ts: None, // TODO
-                        link: Some(link.to_string()),
-                    })
+                let (ts, link) = if let Some(link) = link_url {
+                    (msg.event_ts.clone(), Some(link.clone()))
                 } else {
-                    Ok({
-                        Self {
-                            is_bot: msg.bot_id.is_some(),
-                            user: msg
-                                .user
-                                .clone()
-                                .unwrap_or(msg.bot_id.clone().unwrap_or_default()),
-                            channel: msg.channel.to_string(),
-                            text: msg.common.text.to_string(),
-                            ts: String::from(&msg.common.ts),
-                            thread_ts: if let Some(thread_ts) = msg.common.thread_ts.clone() {
-                                Some(String::from(&thread_ts))
-                            } else {
-                                None
-                            },
-                            link: None,
-                        }
-                    })
-                }
+                    (String::from(&msg.common.ts), None)
+                };
+
+                Ok(Self {
+                    is_bot: msg.bot_id.is_some(),
+                    user: msg
+                        .user
+                        .clone()
+                        .unwrap_or(msg.bot_id.clone().unwrap_or_default()),
+                    channel: msg.channel.to_string(),
+                    text: msg.common.text.to_string(),
+                    ts,
+                    thread_ts: if let Some(thread_ts) = msg.common.thread_ts.clone() {
+                        Some(String::from(&thread_ts))
+                    } else {
+                        None
+                    },
+                    link,
+                })
             }
             _ => Err(ConvertMessageEventError::InvalidMessageType),
         }

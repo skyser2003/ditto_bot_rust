@@ -258,7 +258,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         while let Some(Ok(next_bytes)) = bytes_stream.next().await {
             let mut data = String::from_utf8(next_bytes.to_vec()).unwrap();
 
-            if data.starts_with("[") {
+            if data.starts_with("[") || data.starts_with(",") {
                 data = data[1..].to_string();
             } else if data.ends_with("]") && data.len() > 2 {
                 data = data[..data.len() - 2].to_string();

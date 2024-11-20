@@ -15,7 +15,7 @@ url = "2"
 anyhow = "1.0"
 thiserror = "1.0"
 async-trait = "0.1"
-bytes = "*"
+bytes = "1.8"
 once_cell = "1"
 
 reqwest = { version = "0.11", features = [
@@ -27,9 +27,9 @@ tokio = { version = "1", features = ["full"] }
 axum = { version = "0.6.20", features = ["headers"] }
 axum-server = { version = "0.5.1", features = ["tls-rustls"], optional = true }
 tower-http = { version = "0.4.4", features = ["auth"] }
-tower = { version = "*", features = ["util"] }
-http = "*"
-hyper = "*"
+tower = { version = "0.5", features = ["util"] }
+http = "1.1"
+hyper = "1.5"
 
 rustls = "0.21.8"
 

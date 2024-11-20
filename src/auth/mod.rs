@@ -176,7 +176,7 @@ mod tests {
             .layer(AsyncRequireAuthorizationLayer::new(
                 SlackAuthorization::new(SECRET.iter().cloned().collect()),
             ))
-            .service_fn(echo);
+            .service(tower::service_fn(echo));
 
         let service = ServiceExt::<Request<Body>>::ready(&mut service)
             .await

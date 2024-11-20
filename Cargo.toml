@@ -1,7 +1,10 @@
 [package]
 name = "ditto-bot-rust"
 version = "0.1.0"
-authors = ["장승호(Seung Ho Jang) <shjang1992@gmail.com>", "Seungmin Lee <elenesgu@gmail.com>"]
+authors = [
+	"장승호(Seung Ho Jang) <shjang1992@gmail.com>",
+	"Seungmin Lee <elenesgu@gmail.com>",
+]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -15,13 +18,16 @@ async-trait = "0.1"
 bytes = "*"
 once_cell = "1"
 
-reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.11", features = [
+	"json",
+	"rustls-tls",
+], default-features = false }
 tokio = { version = "1", features = ["full"] }
 
 axum = { version = "0.6.20", features = ["headers"] }
 axum-server = { version = "0.5.1", features = ["tls-rustls"], optional = true }
 tower-http = { version = "0.4.4", features = ["auth"] }
-tower = "*"
+tower = { version = "*", features = ["util"] }
 http = "*"
 hyper = "*"
 

@@ -391,6 +391,9 @@ async fn main() -> anyhow::Result<()> {
     let openai_key = env::var("OPENAI_KEY").context("OpenAI key is not given")?;
     info!("OpenAI Key: {:?}", openai_key);
 
+    let openai_model = env::var("OPENAI_MODEL").unwrap_or("gpt-4".to_string());
+    info!("OpenAI model: {:?}", openai_model);
+    
     let gemini_key = env::var("GEMINI_KEY").context("Gemini key is not given")?;
     info!("Gemini Key: {:?}", gemini_key);
 

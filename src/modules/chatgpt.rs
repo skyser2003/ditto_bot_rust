@@ -105,8 +105,6 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         return Ok(());
     }
 
-    let temperature = gpt_split[1].parse::<f32>().unwrap_or(0.0);
-
     let call_prefix = format!("{} {} ", slack_bot_format, call_type);
 
     debug!("GPT: bot command full text = {:?}", &msg.text);
@@ -136,6 +134,11 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     };
 
     let openai_model = env::var("OPENAI_MODEL").unwrap_or("gpt-4".to_string());
+    let temperature = if openai_model.starts_with("o1") {
+        1.0
+    } else {
+        gpt_split[1].parse::<f32>().unwrap_or(0.0)
+    };
 
     let mut openai_body = OpenAIChatCompletionBody {
         model: openai_model,

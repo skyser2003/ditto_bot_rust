@@ -1,4 +1,4 @@
-use crate::{slack, Message};
+use crate::{slack, Message, ReplyMessageEvent};
 
 use reqwest::Url;
 
@@ -13,6 +13,15 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
 
         parsed_url.set_host(Some("vxtwitter.com"))?;
 
+        let reply_event = if let Some(thread_ts) = &msg.thread_ts {
+            Some(ReplyMessageEvent {
+                msg: thread_ts.to_string(),
+                broadcast: false,
+            })
+        } else {
+            None
+        };
+
         bot.send_message(
             &msg.channel,
             Message::Blocks(&[slack::BlockElement::RichText {
@@ -23,7 +32,7 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
                     })],
                 }],
             }]),
-            None,
+            reply_event,
             Some(true),
         )
         .await?;

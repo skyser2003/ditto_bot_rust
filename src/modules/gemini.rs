@@ -2,7 +2,6 @@ use std::{borrow::Cow, env};
 
 use futures::StreamExt;
 use log::{debug, info};
-use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 
 use crate::{

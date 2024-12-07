@@ -1,9 +1,11 @@
 use crate::{slack, Message};
 use redis::Commands;
 use slack::UsersList;
-use std::cmp::{max, min};
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    cmp::{max, min},
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     let mut conn = bot.redis();

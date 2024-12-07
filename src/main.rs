@@ -1,23 +1,11 @@
 use anyhow::{anyhow, Context as _};
 use async_trait::async_trait;
-use axum::{
-    body::Body,
-    extract::Extension,
-    response::{IntoResponse, Response},
-    routing::MethodFilter,
-    Json,
-};
+use axum::{extract::Extension, routing::MethodFilter};
 use log::{debug, error, info, warn};
-use reqwest::StatusCode;
-use slack::{
-    ConversationReplyResponse, EditMessage, EditMessageResponse, PostMessage, PostMessageResponse,
-};
-use std::{
-    convert::{TryFrom, TryInto},
-    env,
-    sync::Arc,
-};
+use slack::protocol::{ConversationReplyResponse, EditMessageResponse, PostMessageResponse};
+use std::{env, sync::Arc};
 
+mod discord;
 mod modules;
 mod slack;
 #[cfg(test)]
@@ -45,115 +33,9 @@ pub enum ConvertMessageEventError {
     InvalidMessageType,
 }
 
-impl TryFrom<&slack::InternalEvent> for MessageEvent {
-    type Error = ConvertMessageEventError;
-
-    fn try_from(val: &slack::InternalEvent) -> std::result::Result<Self, Self::Error> {
-        match val {
-            slack::InternalEvent::Message(slack::Message::BasicMessage(msg)) => {
-                let mut link_url: Option<&String> = None;
-
-                msg.blocks.iter().any(|block| {
-                    block.elements.iter().any(|element| match element {
-                        slack::BlockElement::Link(link_block) => {
-                            link_url = Some(&link_block.url);
-                            true
-                        }
-                        slack::BlockElement::RichTextSection { elements } => {
-                            elements.iter().any(|element| match element {
-                                slack::BlockElement::Link(link_block) => {
-                                    link_url = Some(&link_block.url);
-
-                                    true
-                                }
-                                _ => false,
-                            })
-                        }
-                        _ => false,
-                    })
-                });
-
-                let (ts, link) = if let Some(link) = link_url {
-                    (msg.event_ts.clone(), Some(link.clone()))
-                } else {
-                    (String::from(&msg.common.ts), None)
-                };
-
-                Ok(Self {
-                    is_bot: msg.bot_id.is_some(),
-                    user: msg
-                        .user
-                        .clone()
-                        .unwrap_or(msg.bot_id.clone().unwrap_or_default()),
-                    channel: msg.channel.to_string(),
-                    text: msg.common.text.to_string(),
-                    ts,
-                    thread_ts: if let Some(thread_ts) = msg.common.thread_ts.clone() {
-                        Some(String::from(&thread_ts))
-                    } else {
-                        None
-                    },
-                    link,
-                })
-            }
-            _ => Err(ConvertMessageEventError::InvalidMessageType),
-        }
-    }
-}
-
 pub enum Message<'a> {
-    Blocks(&'a [slack::BlockElement]),
+    Blocks(&'a [slack::protocol::BlockElement]),
     Text(&'a str),
-}
-
-impl<'a> Message<'a> {
-    fn as_postmessage(
-        &self,
-        channel: &'a str,
-        reply: Option<ReplyMessageEvent>,
-        unfurl_links: Option<bool>,
-    ) -> PostMessage<'a> {
-        let (thread_ts, reply_broadcast) = match reply {
-            Some(reply) => (Some(reply.msg), Some(reply.broadcast)),
-            None => (None, None),
-        };
-
-        match self {
-            Message::Blocks(blocks) => slack::PostMessage {
-                channel,
-                text: None,
-                blocks: Some(blocks),
-                thread_ts,
-                reply_broadcast,
-                unfurl_links,
-            },
-            Message::Text(text) => slack::PostMessage {
-                channel,
-                text: Some(text),
-                blocks: None,
-                thread_ts,
-                reply_broadcast,
-                unfurl_links,
-            },
-        }
-    }
-
-    fn as_editmessage(&self, channel: &'a str, ts: &'a str) -> EditMessage<'a> {
-        match self {
-            Message::Blocks(blocks) => EditMessage {
-                channel,
-                text: None,
-                blocks: Some(blocks),
-                ts: ts.to_string(),
-            },
-            Message::Text(text) => EditMessage {
-                channel,
-                text: Some(text),
-                blocks: None,
-                ts: ts.to_string(),
-            },
-        }
-    }
 }
 
 #[async_trait]
@@ -307,7 +189,7 @@ impl Bot for DittoBot {
 }
 
 impl DittoBot {
-    async fn slack_event_handler(&self, msg: MessageEvent) -> anyhow::Result<()> {
+    async fn handle_message_event(&self, msg: MessageEvent) -> anyhow::Result<()> {
         if msg.is_bot || msg.user.contains(&self.bot_id) {
             debug!("Ignoring bot message");
             return Ok(());
@@ -321,57 +203,6 @@ impl DittoBot {
 
 #[cfg(feature = "check-req")]
 mod auth;
-
-enum HttpResponse {
-    Challenge(String),
-    Ok,
-    Error(StatusCode),
-}
-
-impl IntoResponse for HttpResponse {
-    fn into_response(self) -> Response {
-        match self {
-            HttpResponse::Challenge(s) => Response::builder()
-                .status(StatusCode::OK)
-                .body(axum::body::boxed(Body::from(format!("challenge={}", s)))),
-            HttpResponse::Ok => Response::builder()
-                .status(StatusCode::OK)
-                .body(axum::body::boxed(Body::empty())),
-            HttpResponse::Error(status_code) => Response::builder()
-                .status(status_code)
-                .body(axum::body::boxed(Body::empty())),
-        }
-        .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() })
-    }
-}
-
-async fn http_handler<'a>(
-    Extension(bot): Extension<Arc<DittoBot>>,
-    Json(event): Json<slack::SlackEvent>,
-) -> HttpResponse {
-    debug!("Parsed Event: {:?}", event);
-
-    match event {
-        slack::SlackEvent::UrlVerification { challenge, .. } => HttpResponse::Challenge(challenge),
-        slack::SlackEvent::EventCallback(event_callback) => {
-            match (&event_callback.event).try_into() {
-                Ok(msg) => {
-                    tokio::task::spawn(async move {
-                        if let Err(e) = bot.slack_event_handler(msg).await {
-                            error!("Error occured while handling slack event - {:?}", e);
-                        }
-                    });
-                    HttpResponse::Ok
-                }
-                Err(e) => {
-                    error!("Message conversion fail - {:?}", e);
-
-                    HttpResponse::Error(StatusCode::BAD_REQUEST)
-                }
-            }
-        }
-    }
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -397,7 +228,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = axum::Router::new().route(
         "/",
-        axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
+        axum::routing::on(MethodFilter::POST | MethodFilter::GET, slack::http_handler),
     );
     let app = app.layer(Extension(Arc::new(DittoBot {
         bot_id,

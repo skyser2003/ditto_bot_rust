@@ -2,12 +2,14 @@ use anyhow::anyhow;
 use std::sync::RwLock;
 
 use crate::{
-    slack::{ConversationReplyResponse, EditMessageResponse, PostMessageResponse},
+    slack::protocol::{
+        BlockElement, ConversationReplyResponse, EditMessageResponse, PostMessageResponse,
+    },
     Message, ReplyMessageEvent,
 };
 
 pub enum MockMessage {
-    Blocks(Vec<super::slack::BlockElement>),
+    Blocks(Vec<BlockElement>),
     Text(String),
 }
 

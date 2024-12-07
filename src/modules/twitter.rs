@@ -1,4 +1,7 @@
-use crate::{slack, Message, ReplyMessageEvent};
+use crate::{
+    slack::protocol::{BlockElement, LinkBlock},
+    Message, ReplyMessageEvent,
+};
 
 use reqwest::Url;
 
@@ -24,10 +27,10 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
 
         bot.send_message(
             &msg.channel,
-            Message::Blocks(&[slack::BlockElement::RichText {
+            Message::Blocks(&[BlockElement::RichText {
                 block_id: "".to_string(),
-                elements: vec![slack::BlockElement::RichTextSection {
-                    elements: vec![slack::BlockElement::Link(slack::LinkBlock {
+                elements: vec![BlockElement::RichTextSection {
+                    elements: vec![BlockElement::Link(LinkBlock {
                         url: parsed_url.to_string(),
                     })],
                 }],

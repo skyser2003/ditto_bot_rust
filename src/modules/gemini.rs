@@ -5,7 +5,7 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    slack::{BlockElement, PostMessageResponse, SectionBlock, ThreadMessageType},
+    slack::protocol::{BlockElement, PostMessageResponse, SectionBlock, ThreadMessageType},
     Bot, Message, ReplyMessageEvent,
 };
 

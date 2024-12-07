@@ -1,6 +1,6 @@
 use crate::{slack, Message};
 use redis::Commands;
-use slack::UsersList;
+use slack::protocol::{BlockElement, SectionBlock, TextObject, TextObjectType, UsersList};
 use std::{
     cmp::{max, min},
     collections::HashMap,
@@ -41,9 +41,9 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
             return bot
                 .send_message(
                     &msg.channel,
-                    Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
-                        text: slack::TextObject {
-                            ty: slack::TextObjectType::PlainText,
+                    Message::Blocks(&[BlockElement::Section(SectionBlock {
+                        text: TextObject {
+                            ty: TextObjectType::PlainText,
                             text: "[There is no chat record.]".to_string(),
                             emoji: None,
                             verbatim: None,
@@ -108,9 +108,9 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         return bot
             .send_message(
                 &msg.channel,
-                Message::Blocks(&[slack::BlockElement::Section(slack::SectionBlock {
-                    text: slack::TextObject {
-                        ty: slack::TextObjectType::Markdown,
+                Message::Blocks(&[BlockElement::Section(SectionBlock {
+                    text: TextObject {
+                        ty: TextObjectType::Markdown,
                         text: graph_text,
                         emoji: None,
                         verbatim: None,

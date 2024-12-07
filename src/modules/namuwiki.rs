@@ -1,4 +1,9 @@
-use crate::{slack, Message};
+use crate::{
+    slack::protocol::{
+        ActionBlock, BlockElement, ButtonBlock, ButtonStyle, TextObject, TextObjectType,
+    },
+    Message,
+};
 
 use once_cell::sync::OnceCell;
 use regex::Regex;
@@ -32,11 +37,11 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
 
         bot.send_message(
             &msg.channel,
-            Message::Blocks(&[slack::BlockElement::Actions(slack::ActionBlock {
+            Message::Blocks(&[BlockElement::Actions(ActionBlock {
                 block_id: None,
-                elements: Some(vec![slack::BlockElement::Button(slack::ButtonBlock {
-                    text: slack::TextObject {
-                        ty: slack::TextObjectType::PlainText,
+                elements: Some(vec![BlockElement::Button(ButtonBlock {
+                    text: TextObject {
+                        ty: TextObjectType::PlainText,
                         text: title.to_string(),
                         emoji: None,
                         verbatim: None,
@@ -44,7 +49,7 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
                     action_id: None,
                     url: Some(link.to_string()),
                     value: None,
-                    style: Some(slack::ButtonStyle::Primary),
+                    style: Some(ButtonStyle::Primary),
                 })]),
             })]),
             None,

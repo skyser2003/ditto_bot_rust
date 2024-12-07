@@ -418,6 +418,3 @@ impl SectionBlock {
         }
     }
 }
-
-#[cfg(test)]
-mod test;

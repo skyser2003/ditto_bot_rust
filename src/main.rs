@@ -1,23 +1,21 @@
-use anyhow::anyhow;
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
 use async_trait::async_trait;
-use axum::body::Body;
-use axum::extract::Extension;
-use axum::response::IntoResponse;
-use axum::response::Response;
-use axum::routing::MethodFilter;
-use axum::Json;
+use axum::{
+    body::Body,
+    extract::Extension,
+    response::{IntoResponse, Response},
+    routing::MethodFilter,
+    Json,
+};
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
-use slack::ConversationReplyResponse;
-use slack::EditMessage;
-use slack::EditMessageResponse;
-use slack::PostMessage;
-use slack::PostMessageResponse;
-use std::sync::Arc;
+use slack::{
+    ConversationReplyResponse, EditMessage, EditMessageResponse, PostMessage, PostMessageResponse,
+};
 use std::{
     convert::{TryFrom, TryInto},
     env,
+    sync::Arc,
 };
 
 mod modules;

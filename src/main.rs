@@ -1,31 +1,17 @@
-use anyhow::{anyhow, Context as _};
+use anyhow::{Context as _};
 use async_trait::async_trait;
 use axum::{extract::Extension, routing::MethodFilter};
 use log::{debug, error, info, warn};
-use slack::protocol::{ConversationReplyResponse, EditMessageResponse, PostMessageResponse};
+use message::{Message, MessageEvent, MessageId, MessageTarget};
 use std::{env, sync::Arc};
 
 mod discord;
+mod message;
 mod modules;
 mod slack;
+
 #[cfg(test)]
 pub mod test;
-
-pub struct MessageEvent {
-    is_bot: bool,
-    user: String,
-    channel: String,
-    text: String,
-    ts: String,
-    thread_ts: Option<String>,
-    link: Option<String>,
-}
-
-#[derive(Clone)]
-pub struct ReplyMessageEvent {
-    msg: String,
-    broadcast: bool,
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConvertMessageEventError {
@@ -33,164 +19,119 @@ pub enum ConvertMessageEventError {
     InvalidMessageType,
 }
 
-pub enum Message<'a> {
-    Blocks(&'a [slack::protocol::BlockElement]),
-    Text(&'a str),
+pub struct Config {
+    openai_key: String,
+    gemini_key: String,
 }
 
-#[async_trait]
-pub trait Bot {
-    fn bot_id(&self) -> &'_ str;
-    fn bot_token(&self) -> &'_ str;
-    fn openai_key(&self) -> &'_ str;
-    fn gemini_key(&self) -> &'_ str;
+trait ExtractShared: Send + Sync + Clone {
+    fn extract_from_shared(shared: &Shared) -> Self;
+}
 
-    async fn send_message(
-        &self,
-        channel: &str,
-        msg: Message<'_>,
-        reply: Option<ReplyMessageEvent>,
-        unfurl_links: Option<bool>,
-    ) -> anyhow::Result<PostMessageResponse>;
+macro_rules! declare_shared {
+    (pub struct $name:ident { $($item_name:ident: $item_ty:ty,)+ }) => {
+        pub struct $name {
+            $($item_name: $item_ty,)+
+        }
 
-    async fn edit_message(
-        &self,
-        channel: &str,
-        msg: Message<'_>,
-        ts: &str,
-    ) -> anyhow::Result<EditMessageResponse>;
+        $(
+            impl ExtractShared for $item_ty {
+                fn extract_from_shared(shared: &Shared) -> $item_ty {
+                    shared.$item_name.clone()
+                }
+            }
+        )+
+    };
+}
 
-    async fn get_conversation_relies(
-        &self,
-        channel: &str,
-        ts: &str,
-    ) -> anyhow::Result<ConversationReplyResponse>;
-    fn redis(&self) -> redis::Connection;
+declare_shared! {
+    pub struct Shared {
+        config: Arc<Config>,
+        redis_client: redis::Client,
+    }
+}
+
+trait BotHandler<T> {
+    type Future: std::future::Future<Output = anyhow::Result<()>> + Send + 'static;
+
+    fn call(self, bot: &DittoBot, message: &Message) -> Self::Future;
+}
+
+macro_rules! impl_handlers {
+    ($(($($name:ident),*);)+) => {
+        $(
+            #[allow(non_snake_case, unused_mut)]
+            impl<F, Fut, $($name),*> BotHandler<($($name,)*)> for F
+                where
+                    F: FnOnce(&DittoBot, &Message, $($name),*) -> Fut + Clone + Send + 'static,
+                    Fut: std::future::Future<Output = anyhow::Result<()>> + Send {
+                type Future = std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>>;
+
+                fn call(self, bot: &DittoBot, message: &Message) -> Self::Future {
+                    Box::pin(async move {
+                        $(
+                            let $name = $name::extract_from_shared(&bot.shared);
+                        )*
+
+                        self(bot, message, $($name),*).await
+                    })
+                }
+            }
+        )+
+    };
+}
+
+impl_handlers! {
+    ();
+    (T);
+    (T1, T2);
+    (T1, T2, T3);
+    (T1, T2, T3, T4);
+    (T1, T2, T3, T4, T5);
 }
 
 struct DittoBot {
-    bot_id: String,
-    bot_token: String,
-    openai_key: String,
-    gemini_key: String,
-    http_client: reqwest::Client,
-    redis_client: redis::Client,
+    shared: Arc<Shared>,
+    slack: slack::Bot,
+}
+
+#[async_trait]
+trait Bot {
+    async fn send_message(
+        &self,
+        target: MessageTarget,
+        message: &Message,
+    ) -> anyhow::Result<MessageId>;
+    async fn get_conversation(&self, message_id: MessageId) -> anyhow::Result<Vec<MessageEvent>>;
 }
 
 #[async_trait]
 impl Bot for DittoBot {
-    fn bot_id(&self) -> &'_ str {
-        &self.bot_id
-    }
-
-    fn bot_token(&self) -> &'_ str {
-        &self.bot_token
-    }
-
-    fn openai_key(&self) -> &'_ str {
-        &self.openai_key
-    }
-
-    fn gemini_key(&self) -> &'_ str {
-        &self.gemini_key
-    }
-
     async fn send_message(
         &self,
-        channel: &str,
-        message: Message<'_>,
-        reply: Option<ReplyMessageEvent>,
-        unfurl_links: Option<bool>,
-    ) -> anyhow::Result<PostMessageResponse> {
-        let builder = self
-            .http_client
-            .post("https://slack.com/api/chat.postMessage")
-            .header("Content-type", "application/json; charset=utf-8")
-            .header("Authorization", format!("Bearer {}", &self.bot_token));
-
-        let reply = message.as_postmessage(channel, reply, unfurl_links);
-
-        let resp = builder
-            .json(&reply)
-            .send()
-            .await
-            .context("Failed to send request")?;
-
-        let resp = resp
-            .json::<PostMessageResponse>()
-            .await
-            .context("Failed to parse response")?;
-
-        Ok(resp)
-    }
-
-    async fn edit_message(
-        &self,
-        channel: &str,
-        message: Message<'_>,
-        ts: &str,
-    ) -> anyhow::Result<EditMessageResponse> {
-        let builder = self
-            .http_client
-            .post("https://slack.com/api/chat.update")
-            .header("Content-type", "application/json; charset=utf-8")
-            .header("Authorization", format!("Bearer {}", &self.bot_token));
-
-        let body = message.as_editmessage(channel, ts);
-
-        let resp = builder
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request")?;
-
-        let resp = resp
-            .json::<EditMessageResponse>()
-            .await
-            .context("Failed to parse response")?;
-
-        Ok(resp)
-    }
-
-    async fn get_conversation_relies(
-        &self,
-        channel: &str,
-        ts: &str,
-    ) -> anyhow::Result<ConversationReplyResponse> {
-        let builder = self
-            .http_client
-            .get("https://slack.com/api/conversations.replies")
-            .header("Content-type", "application/json; charset=utf-8")
-            .header("Authorization", format!("Bearer {}", &self.bot_token))
-            .query(&[("channel", channel), ("ts", ts)]);
-
-        let res = builder.send().await.context("Failed to send request")?;
-
-        let body = res.text().await?;
-
-        let json_result = serde_json::from_str::<ConversationReplyResponse>(&body);
-
-        if json_result.is_ok() {
-            Ok(json_result.unwrap())
-        } else {
-            Err(anyhow!(
-                "Json parsing failed for conversations.replies: {:?} {}",
-                json_result.err(),
-                body
-            ))
+        target: MessageTarget,
+        message: &Message,
+    ) -> anyhow::Result<MessageId> {
+        match target {
+            MessageTarget::SlackChannel(channel) => todo!(),
+            MessageTarget::SlackThread {
+                channel,
+                thread_ts,
+                broadcast,
+            } => todo!(),
+            MessageTarget::SlackEditMessage { channel, ts } => todo!(),
+            MessageTarget::DiscordChannel(channel_id) => todo!(),
         }
     }
 
-    fn redis(&self) -> redis::Connection {
-        self.redis_client
-            .get_connection()
-            .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() })
+    async fn get_conversation(&self, message_id: MessageId) -> anyhow::Result<Vec<MessageEvent>> {
+        todo!()
     }
 }
 
 impl DittoBot {
     async fn handle_message_event(&self, msg: MessageEvent) -> anyhow::Result<()> {
-        if msg.is_bot || msg.user.contains(&self.bot_id) {
+        if msg.is_bot {
             debug!("Ignoring bot message");
             return Ok(());
         }
@@ -231,13 +172,15 @@ async fn main() -> anyhow::Result<()> {
         axum::routing::on(MethodFilter::POST | MethodFilter::GET, slack::http_handler),
     );
     let app = app.layer(Extension(Arc::new(DittoBot {
-        bot_id,
-        bot_token,
-        openai_key,
-        gemini_key,
-        http_client: reqwest::Client::new(),
-        redis_client: redis::Client::open(format!("redis://{}", redis_address))
-            .context("Failed to create redis client")?,
+        shared: Arc::new(Shared {
+            config: Arc::new(Config {
+                openai_key,
+                gemini_key,
+            }),
+            redis_client: redis::Client::open(format!("redis://{}", redis_address))
+                .context("Failed to create redis client")?,
+        }),
+        slack: slack::Bot::new(bot_id, bot_token),
     })));
     #[cfg(feature = "check-req")]
     let app = app.layer(tower_http::auth::AsyncRequireAuthorizationLayer::new({

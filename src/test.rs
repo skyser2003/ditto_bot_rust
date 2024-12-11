@@ -5,7 +5,7 @@ use crate::{
     slack::protocol::{
         BlockElement, ConversationReplyResponse, EditMessageResponse, PostMessageResponse,
     },
-    Message, ReplyMessageEvent,
+    Message,
 };
 
 pub enum MockMessage {

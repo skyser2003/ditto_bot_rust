@@ -56,7 +56,7 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
             for keyword in data.keywords {
                 if msg.text.contains(keyword) {
                     bot.send_message(
-                        &msg.channel,
+                        From::from(&msg.source),
                         Message::Blocks(&[BlockElement::Image(ImageBlock {
                             ty: "image".to_string(),
                             image_url: data.image_url.to_string(),

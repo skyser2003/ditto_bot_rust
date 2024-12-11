@@ -26,7 +26,7 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
         };
 
         bot.send_message(
-            &msg.channel,
+            From::from(&msg.source),
             Message::Blocks(&[BlockElement::RichText {
                 block_id: "".to_string(),
                 elements: vec![BlockElement::RichTextSection {
@@ -35,8 +35,6 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
                     })],
                 }],
             }]),
-            reply_event,
-            Some(true),
         )
         .await?;
     }

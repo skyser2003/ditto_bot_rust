@@ -2,6 +2,7 @@ pub mod protocol;
 #[cfg(test)]
 mod test;
 
+use anyhow::{anyhow, Context as _};
 use std::{
     convert::{TryFrom, TryInto},
     sync::Arc,
@@ -14,11 +15,141 @@ use axum::{
 };
 use log::{debug, error};
 use protocol::{
-    BlockElement, EditMessage, InternalEvent, Message as SlackMessage, PostMessage, SlackEvent,
+    BlockElement, ConversationReplyResponse, EditMessage, InternalEvent, Message as SlackMessage,
+    PostMessage, SlackEvent,
 };
 use reqwest::StatusCode;
 
-use crate::{ConvertMessageEventError, DittoBot, Message, MessageEvent, ReplyMessageEvent};
+use crate::{
+    message::{MessageId, MessageSource},
+    ConvertMessageEventError, DittoBot, Message, MessageEvent,
+};
+
+pub struct Bot {
+    bot_id: String,
+    bot_token: String,
+    http_client: reqwest::Client,
+}
+
+impl Bot {
+    pub fn new(bot_id: String, bot_token: String) -> Self {
+        Self {
+            bot_id,
+            bot_token,
+            http_client: reqwest::Client::new(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ReplyMessageEvent {
+    msg: String,
+    broadcast: bool,
+}
+
+impl Bot {
+    pub async fn send_message(
+        &self,
+        channel: &str,
+        thread_ts: Option<&str>,
+        broadcast: Option<bool>,
+        message: &crate::message::Message,
+    ) -> anyhow::Result<MessageId> {
+        let builder = self
+            .http_client
+            .post("https://slack.com/api/chat.postMessage")
+            .header("Content-type", "application/json; charset=utf-8")
+            .header("Authorization", format!("Bearer {}", &self.bot_token));
+
+        let reply = message.as_postmessage(channel, reply, unfurl_links);
+
+        let resp = builder
+            .json(&reply)
+            .send()
+            .await
+            .context("Failed to send request")?;
+
+        let resp = resp
+            .json::<protocol::PostMessageResponse>()
+            .await
+            .context("Failed to parse response")?;
+
+        if !resp.ok {
+            Err(anyhow!(
+                "Slack chat.postMessage Failed - {}",
+                resp.error
+                    .unwrap_or_else(|| "[EMPTY ERROR MESSAGE]".to_string())
+            ))
+        } else {
+            Ok(MessageId::SlackMessage(From::from(&resp.ts.unwrap())))
+        }
+    }
+
+    async fn edit_message(
+        &self,
+        channel: &str,
+        ts: &str,
+        message: &crate::message::Message,
+    ) -> anyhow::Result<MessageId> {
+        let builder = self
+            .http_client
+            .post("https://slack.com/api/chat.update")
+            .header("Content-type", "application/json; charset=utf-8")
+            .header("Authorization", format!("Bearer {}", &self.bot_token));
+
+        let body = message.as_editmessage(channel, ts);
+
+        let resp = builder
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to send request")?;
+
+        let resp = resp
+            .json::<protocol::EditMessageResponse>()
+            .await
+            .context("Failed to parse response")?;
+
+        if !resp.ok {
+            Err(anyhow!(
+                "Slack chat.update Failed - {}",
+                resp.error
+                    .unwrap_or_else(|| "[EMPTY ERROR MESSAGE]".to_string())
+            ))
+        } else {
+            Ok(MessageId::SlackMessage(From::from(&resp.ts.unwrap())))
+        }
+    }
+
+    async fn get_conversation_relies(
+        &self,
+        channel: &str,
+        ts: &str,
+    ) -> anyhow::Result<ConversationReplyResponse> {
+        let builder = self
+            .http_client
+            .get("https://slack.com/api/conversations.replies")
+            .header("Content-type", "application/json; charset=utf-8")
+            .header("Authorization", format!("Bearer {}", &self.bot_token))
+            .query(&[("channel", channel), ("ts", ts)]);
+
+        let res = builder.send().await.context("Failed to send request")?;
+
+        let body = res.text().await?;
+
+        let json_result = serde_json::from_str::<ConversationReplyResponse>(&body);
+
+        if json_result.is_ok() {
+            Ok(json_result.unwrap())
+        } else {
+            Err(anyhow!(
+                "Json parsing failed for conversations.replies: {:?} {}",
+                json_result.err(),
+                body
+            ))
+        }
+    }
+}
 
 impl TryFrom<&InternalEvent> for MessageEvent {
     type Error = ConvertMessageEventError;
@@ -60,14 +191,16 @@ impl TryFrom<&InternalEvent> for MessageEvent {
                         .user
                         .clone()
                         .unwrap_or(msg.bot_id.clone().unwrap_or_default()),
-                    channel: msg.channel.to_string(),
-                    text: msg.common.text.to_string(),
-                    ts,
-                    thread_ts: if let Some(thread_ts) = msg.common.thread_ts.clone() {
-                        Some(String::from(&thread_ts))
+                    source: if let Some(thread_ts) = msg.common.thread_ts {
+                        MessageSource::SlackThread {
+                            channel: msg.channel.clone(),
+                            thread_ts: String::from(&thread_ts),
+                        }
                     } else {
-                        None
+                        MessageSource::SlackChannel(msg.channel.to_string())
                     },
+                    id: MessageId::SlackMessage(ts),
+                    text: msg.common.text.to_string(),
                     link,
                 })
             }
@@ -76,17 +209,16 @@ impl TryFrom<&InternalEvent> for MessageEvent {
     }
 }
 
-impl<'a> super::Message<'a> {
-    pub fn as_postmessage(
+impl crate::message::Message {
+    pub fn as_postmessage<'a>(
         &self,
         channel: &'a str,
-        reply: Option<ReplyMessageEvent>,
+        reply_ts: Option<&'a str>,
+        broadcast: bool,
         unfurl_links: Option<bool>,
     ) -> PostMessage<'a> {
-        let (thread_ts, reply_broadcast) = match reply {
-            Some(reply) => (Some(reply.msg), Some(reply.broadcast)),
-            None => (None, None),
-        };
+        let thread_ts = reply_ts.map(str::to_string);
+        let reply_broadcast = reply_ts.is_some().then_some(broadcast);
 
         match self {
             Message::Blocks(blocks) => PostMessage {
@@ -108,7 +240,7 @@ impl<'a> super::Message<'a> {
         }
     }
 
-    pub fn as_editmessage(&self, channel: &'a str, ts: &'a str) -> EditMessage<'a> {
+    pub fn as_editmessage<'a>(&self, channel: &'a str, ts: &'a str) -> EditMessage<'a> {
         match self {
             Message::Blocks(blocks) => EditMessage {
                 channel,

@@ -1,4 +1,4 @@
-use crate::{slack, Message};
+use crate::{message::User, slack, Message};
 use redis::Commands;
 use slack::protocol::{BlockElement, SectionBlock, TextObject, TextObjectType, UsersList};
 use std::{
@@ -40,7 +40,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
         if records.is_empty() {
             return bot
                 .send_message(
-                    &msg.channel,
+                    From::from(&msg.source),
                     Message::Blocks(&[BlockElement::Section(SectionBlock {
                         text: TextObject {
                             ty: TextObjectType::PlainText,
@@ -107,7 +107,7 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
 
         return bot
             .send_message(
-                &msg.channel,
+                From::from(&msg.source),
                 Message::Blocks(&[BlockElement::Section(SectionBlock {
                     text: TextObject {
                         ty: TextObjectType::Markdown,
@@ -128,10 +128,16 @@ pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> an
     Ok(())
 }
 
-fn increase_chat_count(conn: &mut redis::Connection, user_id: &str) -> anyhow::Result<()> {
+fn increase_chat_count(conn: &mut redis::Connection, user: &User) -> anyhow::Result<()> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let score = now.as_millis();
-    let member = format!("{}:{}", score, user_id);
+    let mut member = score.to_string();
+    write!(&mut member, ":");
+    let user_id = match user {
+        // backward compat
+        User::Slack(id) => member.push_str(&id),
+        User::Discord(user_id) => write!(&mut member, "discord_{}", user_id.as_ref()),
+    };
 
     conn.zadd("ditto-archive", member, score as i64)?;
 

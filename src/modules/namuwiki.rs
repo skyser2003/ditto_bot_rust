@@ -36,7 +36,7 @@ pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow
         };
 
         bot.send_message(
-            &msg.channel,
+            From::from(&msg.source),
             Message::Blocks(&[BlockElement::Actions(ActionBlock {
                 block_id: None,
                 elements: Some(vec![BlockElement::Button(ButtonBlock {

@@ -1,4 +1,4 @@
-use super::*;
+use super::protocol::*;
 
 #[test]
 pub fn test_deserialize_basic_message() {

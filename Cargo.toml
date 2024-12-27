@@ -24,7 +24,7 @@ reqwest = { version = "0.11", features = [
 ], default-features = false }
 tokio = { version = "1", features = ["full"] }
 
-axum = { version = "0.6.20", features = ["headers"] }
+axum = { version = "0.6.20", features = ["headers"], optional = true }
 axum-server = { version = "0.5.1", features = ["tls-rustls"], optional = true }
 tower-http = { version = "0.4.4", features = ["auth"] }
 tower = { version = "0.5", features = ["util"] }
@@ -51,3 +51,4 @@ percent-encoding = "2.3.1"
 [features]
 check-req = []
 use-ssl = ["axum-server"]
+slack = ["axum"]

@@ -177,16 +177,25 @@ async fn http_handler<'a>(
     }
 }
 
-pub async fn run() -> anyhow::Result<()> {
+#[derive(serde::Deserialize)]
+struct Config {
+    bot_token: String,
+    bot_id: String,
+}
+
+pub async fn run(
+    config: toml::Value,
+    mut stop_signal: tokio::sync::watch::Receiver<bool>,
+) -> anyhow::Result<()> {
     use std::env;
 
-    let bot_token = env::var("SLACK_BOT_TOKEN").context("Bot token is not given")?;
-    info!("Bot token: {:?}", bot_token);
+    let config: Config = config.try_into().context("Failed to parse slack config")?;
 
-    let bot_id = env::var("BOT_ID").context("Bot id is not given")?;
+    info!("Bot token: {:?}", config.bot_toekn);
+
     let redis_address = env::var("REDIS_ADDRESS").context("Redis address is not given")?;
 
-    info!("Slack bot id: {:?}", bot_id);
+    info!("Slack bot id: {:?}", config.bot_id);
     info!("Redis address: {:?}", redis_address);
 
     let openai_key = env::var("OPENAI_KEY").context("OpenAI key is not given")?;
@@ -203,8 +212,8 @@ pub async fn run() -> anyhow::Result<()> {
         axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
     );
     let app = app.layer(Extension(Arc::new(DittoBot {
-        bot_id,
-        bot_token,
+        bot_id: config.bot_id,
+        bot_token: config.bot_token,
         openai_key,
         gemini_key,
         http_client: reqwest::Client::new(),
@@ -261,7 +270,11 @@ pub async fn run() -> anyhow::Result<()> {
         info!("Start to bind address with HTTP.");
         axum::Server::bind(&"0.0.0.0:8082".parse()?)
             .serve(app.into_make_service())
-            .with_graceful_shutdown(futures::FutureExt::map(tokio::signal::ctrl_c(), |_| ()))
+            .with_graceful_shutdown(async move {
+                if let Err(e) = stop_signal.wait_for(|v| *v).await {
+                    log::error!("Stop signal is broken");
+                }
+            })
             .await?;
     }
 

@@ -1,7 +1,7 @@
 use std::{borrow::Cow, env};
 
 use futures::StreamExt;
-use log::debug;
+use log::{debug, error};
 use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 
@@ -297,7 +297,8 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                     }
                 }
                 Err(e) => {
-                    debug!("OpenAI SSE error: {:?}", e);
+                    error!("OpenAI SSE body: {:?}", openai_body);
+                    error!("OpenAI SSE error: {:?}", e);
                     break;
                 }
             }

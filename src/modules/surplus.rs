@@ -6,7 +6,14 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn handle<'a, B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
-    let mut conn = bot.redis();
+    let conn = bot.redis();
+
+    if conn.is_err() {
+        log::error!("Failed to connect to Redis");
+        return Ok(());
+    }
+
+    let mut conn = conn.unwrap();
 
     let _ = increase_chat_count(&mut conn, &msg.user);
 

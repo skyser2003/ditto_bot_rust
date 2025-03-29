@@ -185,7 +185,7 @@ pub trait Bot {
         channel: &str,
         ts: &str,
     ) -> anyhow::Result<ConversationReplyResponse>;
-    fn redis(&self) -> redis::Connection;
+    fn redis(&self) -> anyhow::Result<redis::Connection>;
 }
 
 struct DittoBot {
@@ -301,10 +301,10 @@ impl Bot for DittoBot {
         }
     }
 
-    fn redis(&self) -> redis::Connection {
+    fn redis(&self) -> anyhow::Result<redis::Connection> {
         self.redis_client
             .get_connection()
-            .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() })
+            .context("Failed to get redis connection")
     }
 }
 

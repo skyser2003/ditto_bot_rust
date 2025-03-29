@@ -118,7 +118,7 @@ impl super::Bot for MockBot {
         Err(anyhow!("Not implemented!"))
     }
 
-    fn redis(&self) -> redis::Connection {
+    fn redis(&self) -> anyhow::Result<redis::Connection> {
         todo!()
     }
 }

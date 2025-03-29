@@ -204,7 +204,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     };
 
     if openai_body.messages.len() == 0 {
-        debug!("Error! no thread found");
+        error!("Error! no thread found");
 
         openai_body.messages = vec![OpenAIChatCompletionMessage {
             role: "user".to_string(),
@@ -246,7 +246,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                         let sent = gpt_message.stream_message(bot, None).await;
 
                         if sent.is_err() {
-                            debug!("OpenAI SSE stream {} sending failed: {:?}", data, sent);
+                            error!("OpenAI SSE stream {} sending failed: {:?}", data, sent);
                         }
 
                         break;
@@ -255,7 +255,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                     let sse_res = serde_json::from_str::<SseChatCompletion>(&data);
 
                     if sse_res.is_err() {
-                        debug!("OpenAI SSE json parsing failed: {:?}", data);
+                        error!("OpenAI SSE json parsing failed: {:?}", data);
                         continue;
                     }
 
@@ -277,7 +277,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                         {
                             Ok(_) => {}
                             Err(e) => {
-                                debug!("OpenAI SSE stream message sending failed: {:?}", e);
+                                error!("OpenAI SSE stream message sending failed: {:?}", e);
                             }
                         }
                     }
@@ -291,7 +291,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                     let sent = gpt_message.stream_message(bot, Some(" `[continue]`")).await;
 
                     if sent.is_err() {
-                        debug!("OpenAI SSE stream message sending failed: {:?}", sent);
+                        error!("OpenAI SSE stream message sending failed: {:?}", sent);
 
                         return Ok(());
                     }
@@ -480,7 +480,7 @@ impl<'a> GptMessageManager<'a> {
             .await;
 
         if sent.is_err() {
-            debug!("Edit message failed: {:?}", sent.err());
+            error!("Edit message failed: {:?}", sent.err());
         }
 
         Ok(())

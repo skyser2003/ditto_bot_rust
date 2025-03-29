@@ -1,7 +1,7 @@
 use std::{borrow::Cow, env};
 
 use futures::StreamExt;
-use log::{debug, info};
+use log::{debug, error, info};
 use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 
@@ -202,7 +202,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     };
 
     if gemini_body.contents.len() == 0 {
-        debug!("Error! no thread found");
+        error!("Error! no thread found");
 
         gemini_body.contents = vec![GeminiChatStreamMessage {
             role: "user".to_string(),
@@ -267,7 +267,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
             let sse_res = serde_json::from_str::<ResChatCompletion>(&data);
 
             if sse_res.is_err() {
-                debug!("Gemini SSE json parsing failed: {:?}", data);
+                error!("Gemini SSE json parsing failed: {:?}", data);
                 continue;
             }
 
@@ -283,7 +283,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                 {
                     Ok(_) => {}
                     Err(e) => {
-                        debug!("Gemini SSE stream message sending failed: {:?}", e);
+                        error!("Gemini SSE stream message sending failed: {:?}", e);
                     }
                 }
             }
@@ -295,7 +295,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                 .await;
 
             if sent.is_err() {
-                debug!("Gemini SSE stream message sending failed: {:?}", sent);
+                error!("Gemini SSE stream message sending failed: {:?}", sent);
 
                 return Ok(());
             }
@@ -308,7 +308,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         let sent = gemini_message.stream_message(bot, None).await;
 
         if sent.is_err() {
-            debug!(
+            error!(
                 "Gemini SSE stream {} sending failed: {:?}",
                 done_message, sent
             );
@@ -491,7 +491,7 @@ impl<'a> GeminiMessageManager<'a> {
             .await;
 
         if sent.is_err() {
-            debug!("Edit message failed: {:?}", sent.err());
+            error!("Edit message failed: {:?}", sent.err());
         }
 
         Ok(())

@@ -218,8 +218,6 @@ pub enum InternalEvent {
     Message(Message),
     LinkShared(LinkSharedMessage),
     AppMention,
-    #[serde(untagged)]
-    Unknown(serde_json::Value),
 }
 
 #[allow(dead_code)]

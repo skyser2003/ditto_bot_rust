@@ -17,6 +17,7 @@ services:
       - GEMINI_KEY=$GEMINI_KEY
       - USE_GPT_STREAM=$USE_GPT_STREAM
       - OPENAI_MODEL=$OPENAI_MODEL
+      - SOCKET_MODE=$SOCKET_MODE
     ports:
       - 2525:8082
   redis:

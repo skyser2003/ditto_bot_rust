@@ -109,12 +109,10 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     link,
                 })
             }
-            slack::InternalEvent::LinkShared(_) => {
-                Err(ConvertMessageEventError::InvalidMessageType(
-                    "LinkShared event not supported".to_string(),
-                ))
-            }
-            slack::InternalEvent::AppMention => Err(ConvertMessageEventError::InvalidMessageType(
+            slack::InternalEvent::LinkShared(_) => Err(ConvertMessageEventError::Unsupported(
+                "LinkShared event not supported".to_string(),
+            )),
+            slack::InternalEvent::AppMention => Err(ConvertMessageEventError::Unsupported(
                 "AppMention event not supported".to_string(),
             )),
             _ => Err(ConvertMessageEventError::InvalidMessageType(format!(

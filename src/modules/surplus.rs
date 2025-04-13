@@ -138,7 +138,7 @@ fn increase_chat_count(conn: &mut redis::Connection, user_id: &str) -> anyhow::R
     let score = now.as_millis();
     let member = format!("{}:{}", score, user_id);
 
-    conn.zadd("ditto-archive", member, score as i64)?;
+    let _: () = conn.zadd("ditto-archive", member, score as i64)?;
 
     Ok(())
 }

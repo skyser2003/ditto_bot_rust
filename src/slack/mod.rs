@@ -5,8 +5,6 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::MessageEvent;
-
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StrTimeStamp(String);
 
@@ -152,23 +150,9 @@ pub struct Block {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Reaction {
-    pub count: u32,
-    pub name: String,
-    pub users: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
 pub struct Edited {
     pub ts: StrTimeStamp,
     pub user: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Icons {
-    pub image_36: Option<String>,
-    pub image_48: Option<String>,
-    pub image_72: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -238,6 +222,7 @@ pub enum InternalEvent {
     Unknown(serde_json::Value),
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct EventCallback {
     pub api_app_id: String,
@@ -249,6 +234,7 @@ pub struct EventCallback {
     pub token: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct SlackEventsApi {
     pub envelope_id: String,
@@ -366,6 +352,7 @@ pub enum SlackEvent {
     /// Content-type: application/x-www-form-urlencoded
     /// challenge=SOME_VALUE
     EventCallback(Box<EventCallback>),
+    #[allow(dead_code)]
     UrlVerification {
         token: String,
         challenge: String,
@@ -377,6 +364,7 @@ pub enum SlackEvent {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SlackHello {
@@ -385,6 +373,7 @@ pub struct SlackHello {
     pub connection_info: Option<SlackHelloConnectionInfo>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SlackHelloDebugInfo {
@@ -393,6 +382,7 @@ pub struct SlackHelloDebugInfo {
     pub approximate_connection_time: i32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SlackHelloConnectionInfo {

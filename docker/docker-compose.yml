@@ -8,6 +8,7 @@ services:
     image: registry.skyser.kr/shipduck/ditto_bot_rust
     environment:
       - SLACK_BOT_TOKEN=$SLACK_BOT_TOKEN
+      - SLACK_APP_TOKEN=$SLACK_APP_TOKEN
       - SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET
       - REDIS_ADDRESS=$REDIS_ADDRESS
       - RUST_LOG=$RUST_LOG

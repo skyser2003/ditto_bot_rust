@@ -5,6 +5,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
+use crate::MessageEvent;
+
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StrTimeStamp(String);
 
@@ -231,6 +233,9 @@ pub enum Message {
 pub enum InternalEvent {
     Message(Message),
     LinkShared(LinkSharedMessage),
+    AppMention,
+    #[serde(untagged)]
+    Unknown(serde_json::Value),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -242,6 +247,15 @@ pub struct EventCallback {
     pub event_time: NumericTimeStamp,
     pub team_id: String,
     pub token: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SlackEventsApi {
+    pub envelope_id: String,
+    pub payload: Option<EventCallback>,
+    pub accepts_response_payload: bool,
+    pub retry_attempt: i32,
+    pub retry_reason: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -356,6 +370,40 @@ pub enum SlackEvent {
         token: String,
         challenge: String,
     },
+    Hello(SlackHello),
+    EventsApi(SlackEventsApi),
+    Disconnect {
+        reason: String,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SlackHello {
+    pub num_connections: i32,
+    pub debug_info: Option<SlackHelloDebugInfo>,
+    pub connection_info: Option<SlackHelloConnectionInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SlackHelloDebugInfo {
+    pub host: String,
+    pub build_number: i32,
+    pub approximate_connection_time: i32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SlackHelloConnectionInfo {
+    pub app_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SlackSocketOutput {
+    pub payload: Option<serde_json::Value>,
+    pub envelope_id: String,
 }
 
 /**

@@ -7,6 +7,9 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::MethodFilter;
 use axum::Json;
+use bytes::Bytes;
+use futures::SinkExt;
+use futures::StreamExt;
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
 use slack::ConversationReplyResponse;
@@ -14,11 +17,17 @@ use slack::EditMessage;
 use slack::EditMessageResponse;
 use slack::PostMessage;
 use slack::PostMessageResponse;
+use slack::SlackSocketOutput;
 use std::sync::Arc;
 use std::{
     convert::{TryFrom, TryInto},
     env,
 };
+use tokio::net::TcpStream;
+use tokio_tungstenite::tungstenite::Utf8Bytes;
+use tokio_tungstenite::MaybeTlsStream;
+use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message as TungsteniteMessage};
 
 mod modules;
 mod slack;
@@ -43,8 +52,10 @@ pub struct ReplyMessageEvent {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConvertMessageEventError {
+    #[error("Unsupported")]
+    Unsupported(String),
     #[error("Invalid message type")]
-    InvalidMessageType,
+    InvalidMessageType(String),
 }
 
 impl TryFrom<&slack::InternalEvent> for MessageEvent {
@@ -98,7 +109,18 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     link,
                 })
             }
-            _ => Err(ConvertMessageEventError::InvalidMessageType),
+            slack::InternalEvent::LinkShared(_) => {
+                Err(ConvertMessageEventError::InvalidMessageType(
+                    "LinkShared event not supported".to_string(),
+                ))
+            }
+            slack::InternalEvent::AppMention => Err(ConvertMessageEventError::InvalidMessageType(
+                "AppMention event not supported".to_string(),
+            )),
+            _ => Err(ConvertMessageEventError::InvalidMessageType(format!(
+                "{:?}",
+                val
+            ))),
         }
     }
 }
@@ -366,13 +388,163 @@ async fn http_handler<'a>(
                     HttpResponse::Ok
                 }
                 Err(e) => {
-                    error!("Message conversion fail - {:?}", e);
+                    match e {
+                        ConvertMessageEventError::Unsupported(_) => {
+                            debug!("Unsupported message type - {:?}", e);
+                        }
+                        ConvertMessageEventError::InvalidMessageType(_) => {
+                            error!("Message conversion fail - {:?}", e);
+                        }
+                    }
 
                     HttpResponse::Error(StatusCode::BAD_REQUEST)
                 }
             }
         }
+        _ => {
+            error!("Should not be received in http mode - {:?}", event);
+            HttpResponse::Error(StatusCode::BAD_REQUEST)
+        }
     }
+}
+
+async fn socket_handler(mut ws: WebSocketStream<MaybeTlsStream<TcpStream>>, bot: Arc<DittoBot>) {
+    while let Some(data) = ws.next().await {
+        let data = match data {
+            Ok(data) => data,
+            Err(e) => {
+                error!("Error while receiving data - {:?}", e);
+                break;
+            }
+        };
+
+        match data {
+            TungsteniteMessage::Text(text) => {
+                debug!("Received text message: {:?}", text);
+                let event: slack::SlackEvent = serde_json::from_str(&text).unwrap();
+
+                let mut envelope_id = String::new();
+
+                match &event {
+                    slack::SlackEvent::EventsApi(events_api) => {
+                        envelope_id = events_api.envelope_id.clone();
+
+                        let payload = &events_api.payload;
+
+                        if payload.is_none() {
+                            error!("Payload is None");
+                            continue;
+                        }
+
+                        let payload = payload.as_ref().unwrap();
+
+                        match (&payload.event).try_into() {
+                            Ok(msg) => {
+                                let bot = bot.clone();
+
+                                tokio::task::spawn(async move {
+                                    if let Err(e) = bot.slack_event_handler(msg).await {
+                                        error!(
+                                            "Error occured while handling slack event - {:?}",
+                                            e
+                                        );
+                                    }
+                                });
+                            }
+                            Err(e) => match e {
+                                ConvertMessageEventError::Unsupported(_) => {
+                                    debug!("Unsupported message type - {:?}", e);
+                                }
+                                ConvertMessageEventError::InvalidMessageType(_) => {
+                                    error!("Message conversion fail - {:?}", e);
+                                }
+                            },
+                        }
+                    }
+                    slack::SlackEvent::Hello(hello) => {
+                        debug!("Hello! Number of connections: {}", hello.num_connections);
+                    }
+                    slack::SlackEvent::Disconnect { reason } => {
+                        info!("Disconnect received from slack - {:?}", reason);
+
+                        // Reconnect
+                        ws = connect_slack_socket(&bot.bot_token)
+                            .await
+                            .context("Failed to reconnect to slack socket")
+                            .unwrap();
+
+                        info!("Reconnected to slack socket.");
+                    }
+                    _ => {
+                        error!("Should not be received in socket mode - {:?}", event);
+                    }
+                }
+
+                // If event is not hello
+                // send ack to slack
+                match &event {
+                    slack::SlackEvent::Hello(_) => {}
+                    _ => {
+                        let ack = SlackSocketOutput {
+                            envelope_id,
+                            payload: None,
+                        };
+
+                        ws.send(TungsteniteMessage::Text(Utf8Bytes::from(
+                            serde_json::to_string(&ack).unwrap(),
+                        )))
+                        .await
+                        .unwrap();
+                    }
+                }
+            }
+            TungsteniteMessage::Ping(_) => {
+                debug!("Received ping message");
+                ws.send(TungsteniteMessage::Pong(Bytes::from("Pong from ditto")))
+                    .await
+                    .unwrap();
+            }
+            etc => {
+                debug!("Received non-text message: {:?}", etc);
+            }
+        }
+    }
+}
+
+async fn connect_slack_socket(
+    app_token: &str,
+) -> anyhow::Result<WebSocketStream<MaybeTlsStream<TcpStream>>> {
+    let socket_url = "https://slack.com/api/apps.connections.open";
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(socket_url)
+        .header("Authorization", format!("Bearer {}", app_token))
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    if response["ok"].as_bool() != Some(true) {
+        return Err(anyhow!(
+            "Failed to open socket connection: {}",
+            response["error"]
+        ));
+    }
+
+    let url = response["url"]
+        .as_str()
+        .ok_or_else(|| anyhow!("Invalid socket URL"))?;
+
+    info!("Socket connection url: {:?}", url);
+
+    let (ws, _) = connect_async(url)
+        .await
+        .context("Failed to connect to slack websocket.")?;
+
+    info!("Connected to slack websocket.");
+
+    Ok(ws)
 }
 
 #[tokio::main]
@@ -381,6 +553,9 @@ async fn main() -> anyhow::Result<()> {
 
     let bot_token = env::var("SLACK_BOT_TOKEN").context("Bot token is not given")?;
     info!("Bot token: {:?}", bot_token);
+
+    let app_token = env::var("SLACK_APP_TOKEN").context("App token is not given")?;
+    info!("App token: {:?}", app_token);
 
     let bot_id = env::var("BOT_ID").context("Bot id is not given")?;
     let redis_address = env::var("REDIS_ADDRESS").context("Redis address is not given")?;
@@ -397,11 +572,18 @@ async fn main() -> anyhow::Result<()> {
     let gemini_key = env::var("GEMINI_KEY").context("Gemini key is not given")?;
     info!("Gemini Key: {:?}", gemini_key);
 
+    let socket_mode = env::var("SOCKET_MODE").unwrap_or("0".to_string());
+    info!("Socket mode: {:?}", socket_mode);
+
+    let is_socket_mode = socket_mode == "1" || socket_mode.to_lowercase() == "true";
+    info!("Is socket mode: {:?}", is_socket_mode);
+
     let app = axum::Router::new().route(
         "/",
         axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
     );
-    let app = app.layer(Extension(Arc::new(DittoBot {
+
+    let bot = Arc::new(DittoBot {
         bot_id,
         bot_token,
         openai_key,
@@ -409,59 +591,71 @@ async fn main() -> anyhow::Result<()> {
         http_client: reqwest::Client::new(),
         redis_client: redis::Client::open(format!("redis://{}", redis_address))
             .context("Failed to create redis client")?,
-    })));
-    #[cfg(feature = "check-req")]
-    let app = app.layer(tower_http::auth::AsyncRequireAuthorizationLayer::new({
-        let signing_secret = env::var("SLACK_SIGNING_SECRET")
-            .context("Signing secret is not given.")?
-            .into_bytes();
-        auth::SlackAuthorization::new(signing_secret)
-    }));
+    });
 
-    let use_ssl = env::var("USE_SSL")
-        .ok()
-        .and_then(|v| {
-            if cfg!(feature = "use-ssl") {
-                v.parse().ok()
-            } else {
-                warn!("use-ssl feature is disabled!. USE_SSL env will be ignored");
-                Some(false)
-            }
-        })
-        .unwrap_or(false);
-    if use_ssl {
-        #[cfg(feature = "use-ssl")]
-        {
-            use axum_server::tls_rustls::RustlsConfig;
-            use axum_server::Handle;
+    if is_socket_mode {
+        info!("Start using slack socket mode.");
 
-            info!("Start to bind address with ssl.");
-            let config = RustlsConfig::from_pem_file("PUBLIC_KEY.pem", "PRIVATE_KEY.pem")
-                .await
-                .context("Fail to open pem files")?;
+        let ws = connect_slack_socket(&app_token)
+            .await
+            .context("Failed to connect to slack socket")?;
 
-            let handle = Handle::new();
-            let handle_for_ctrl = handle.clone();
+        socket_handler(ws, bot).await;
+    } else {
+        let app = app.layer(Extension(bot));
+        #[cfg(feature = "check-req")]
+        let app = app.layer(tower_http::auth::AsyncRequireAuthorizationLayer::new({
+            let signing_secret = env::var("SLACK_SIGNING_SECRET")
+                .context("Signing secret is not given.")?
+                .into_bytes();
+            auth::SlackAuthorization::new(signing_secret)
+        }));
 
-            tokio::spawn(async move {
-                tokio::signal::ctrl_c()
+        let use_ssl = env::var("USE_SSL")
+            .ok()
+            .and_then(|v| {
+                if cfg!(feature = "use-ssl") {
+                    v.parse().ok()
+                } else {
+                    warn!("use-ssl feature is disabled!. USE_SSL env will be ignored");
+                    Some(false)
+                }
+            })
+            .unwrap_or(false);
+        if use_ssl {
+            #[cfg(feature = "use-ssl")]
+            {
+                use axum_server::tls_rustls::RustlsConfig;
+                use axum_server::Handle;
+
+                info!("Start to bind address with ssl.");
+                let config = RustlsConfig::from_pem_file("PUBLIC_KEY.pem", "PRIVATE_KEY.pem")
                     .await
-                    .expect("Failed to listen signal.");
-                info!("Gracefully shutdown...");
-                handle_for_ctrl.graceful_shutdown(None);
-            });
+                    .context("Fail to open pem files")?;
 
-            axum_server::bind_rustls("0.0.0.0:14475".parse()?, config)
-                .handle(handle)
+                let handle = Handle::new();
+                let handle_for_ctrl = handle.clone();
+
+                tokio::spawn(async move {
+                    tokio::signal::ctrl_c()
+                        .await
+                        .expect("Failed to listen signal.");
+                    info!("Gracefully shutdown...");
+                    handle_for_ctrl.graceful_shutdown(None);
+                });
+
+                axum_server::bind_rustls("0.0.0.0:14475".parse()?, config)
+                    .handle(handle)
+                    .serve(app.into_make_service())
+                    .await?;
+            }
+        } else {
+            info!("Start to bind address with HTTP.");
+            axum::Server::bind(&"0.0.0.0:8082".parse()?)
                 .serve(app.into_make_service())
+                .with_graceful_shutdown(futures::FutureExt::map(tokio::signal::ctrl_c(), |_| ()))
                 .await?;
         }
-    } else {
-        info!("Start to bind address with HTTP.");
-        axum::Server::bind(&"0.0.0.0:8082".parse()?)
-            .serve(app.into_make_service())
-            .with_graceful_shutdown(futures::FutureExt::map(tokio::signal::ctrl_c(), |_| ()))
-            .await?;
     }
 
     Ok(())

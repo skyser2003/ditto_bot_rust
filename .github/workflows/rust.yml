@@ -38,6 +38,9 @@ jobs:
           tar xzf ec-$OS-$ARCH.tar.gz
           ./bin/ec-$OS-$ARCH
 
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
       - name: Run tests
         run: cargo test --verbose --all-features
 

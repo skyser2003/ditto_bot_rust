@@ -14,6 +14,7 @@ use log::{debug, error, info, warn};
 use reqwest::StatusCode;
 use rmcp::service::RunningService;
 use rmcp::transport::TokioChildProcess;
+use rmcp::Peer;
 use rmcp::RoleClient;
 use rmcp::ServiceExt;
 use slack::ConversationReplyResponse;
@@ -22,6 +23,7 @@ use slack::EditMessageResponse;
 use slack::PostMessage;
 use slack::PostMessageResponse;
 use slack::SlackSocketOutput;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::{
     convert::{TryFrom, TryInto},
@@ -38,6 +40,8 @@ mod modules;
 mod slack;
 #[cfg(test)]
 pub mod test;
+
+type McpClient = RunningService<RoleClient, ()>;
 
 pub struct MessageEvent {
     is_bot: bool,
@@ -225,18 +229,30 @@ struct DittoBot {
     gemini_key: String,
     http_client: reqwest::Client,
     redis_client: redis::Client,
-    mcp_clients: Vec<rmcp::service::RunningService<rmcp::RoleClient, ()>>,
+    mcp_clients: HashMap<String, McpClient>,
+    mcp_tools: HashMap<String, Peer<RoleClient>>,
 }
 
 impl DittoBot {
-    pub fn new(
+    pub async fn new(
         bot_id: String,
         bot_token: String,
         openai_key: String,
         gemini_key: String,
         redis_client: redis::Client,
-        mcp_clients: Vec<RunningService<RoleClient, ()>>,
+        mcp_clients: HashMap<String, McpClient>,
     ) -> Self {
+        let mut mcp_tools = HashMap::new();
+
+        for (name, client) in mcp_clients.iter() {
+            let tools = client.list_all_tools().await.unwrap_or_default();
+
+            for tool in tools {
+                let unified_name = format!("{}:{}", name, tool.name);
+                mcp_tools.insert(unified_name, client.peer().clone());
+            }
+        }
+
         Self {
             bot_id,
             bot_token,
@@ -245,11 +261,12 @@ impl DittoBot {
             http_client: reqwest::Client::new(),
             redis_client,
             mcp_clients,
+            mcp_tools,
         }
     }
 
-    async fn create_mcp_clients(tz: String) -> Vec<RunningService<RoleClient, ()>> {
-        let mut results = vec![];
+    async fn create_mcp_clients(tz: String) -> HashMap<String, McpClient> {
+        let mut results = HashMap::new();
 
         let client1 = async move {
             ().serve(TokioChildProcess::new(
@@ -262,12 +279,12 @@ impl DittoBot {
         }
         .await;
 
-        results.push(client1);
+        results.insert("mcp-server-time", client1);
 
         results
             .into_iter()
-            .filter_map(|result| match result {
-                Ok(client) => Some(client),
+            .filter_map(|(name, client)| match client {
+                Ok(client) => Some((name.to_string(), client)),
                 Err(e) => {
                     error!("Failed to create mcp client - {:?}", e);
                     None
@@ -652,15 +669,18 @@ async fn main() -> anyhow::Result<()> {
 
     let mcp_clients = DittoBot::create_mcp_clients(tz).await;
 
-    let bot = Arc::new(DittoBot::new(
-        bot_id.clone(),
-        bot_token.clone(),
-        openai_key.clone(),
-        gemini_key.clone(),
-        redis::Client::open(format!("redis://{}", redis_address))
-            .context("Failed to create redis client")?,
-        mcp_clients,
-    ));
+    let bot = Arc::new(
+        DittoBot::new(
+            bot_id.clone(),
+            bot_token.clone(),
+            openai_key.clone(),
+            gemini_key.clone(),
+            redis::Client::open(format!("redis://{}", redis_address))
+                .context("Failed to create redis client")?,
+            mcp_clients,
+        )
+        .await,
+    );
 
     if is_socket_mode {
         info!("Start using slack socket mode.");

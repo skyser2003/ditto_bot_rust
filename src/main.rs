@@ -222,6 +222,25 @@ struct DittoBot {
     redis_client: redis::Client,
 }
 
+impl DittoBot {
+    pub fn new(
+        bot_id: String,
+        bot_token: String,
+        openai_key: String,
+        gemini_key: String,
+        redis_client: redis::Client,
+    ) -> Self {
+        Self {
+            bot_id,
+            bot_token,
+            openai_key,
+            gemini_key,
+            http_client: reqwest::Client::new(),
+            redis_client,
+        }
+    }
+}
+
 #[async_trait]
 impl Bot for DittoBot {
     fn bot_id(&self) -> &'_ str {
@@ -593,15 +612,14 @@ async fn main() -> anyhow::Result<()> {
         axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
     );
 
-    let bot = Arc::new(DittoBot {
-        bot_id,
-        bot_token,
-        openai_key,
-        gemini_key,
-        http_client: reqwest::Client::new(),
-        redis_client: redis::Client::open(format!("redis://{}", redis_address))
+    let bot = Arc::new(DittoBot::new(
+        bot_id.clone(),
+        bot_token.clone(),
+        openai_key.clone(),
+        gemini_key.clone(),
+        redis::Client::open(format!("redis://{}", redis_address))
             .context("Failed to create redis client")?,
-    });
+    ));
 
     if is_socket_mode {
         info!("Start using slack socket mode.");

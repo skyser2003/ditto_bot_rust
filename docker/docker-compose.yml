@@ -18,6 +18,7 @@ services:
       - USE_GPT_STREAM=$USE_GPT_STREAM
       - OPENAI_MODEL=$OPENAI_MODEL
       - SOCKET_MODE=$SOCKET_MODE
+      - TZ=$TZ
     ports:
       - 2525:8082
   redis:

@@ -24,6 +24,7 @@ struct OpenAIResponsesBody {
     previous_response_id: Option<String>,
     store: bool,
     stream: bool,
+    tools: Vec<OpenAIResponsesTool>,
 }
 
 #[derive(Deserialize)]
@@ -49,6 +50,8 @@ pub enum ResponsesStreamingResponse {
     ContentPartAdded,
     #[serde(rename = "response.content_part.done")]
     ContentPartDone,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Deserialize)]
@@ -89,6 +92,15 @@ pub struct ResponsesStreamingOutputContent {
     #[serde(rename = "type")]
     type_field: String,
     text: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
+enum OpenAIResponsesTool {
+    Function,
+    #[serde(rename = "web_search_preview")]
+    WebSearch,
 }
 
 #[derive(Serialize)]
@@ -182,6 +194,12 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         gpt_split[1].parse::<f32>().unwrap_or(0.0)
     };
 
+    let mut tools = vec![];
+
+    if !openai_model.starts_with("o") {
+        tools.push(OpenAIResponsesTool::WebSearch);
+    }
+
     let mut openai_body = OpenAIResponsesBody {
         model: openai_model,
         input: vec![],
@@ -189,6 +207,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         stream: stream_mode,
         store: false,
         previous_response_id: None,
+        tools,
     };
 
     if let Ok(conv_res) = conv_result {
@@ -342,7 +361,8 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                         | ResponsesStreamingResponse::OutputItemDone
                         | ResponsesStreamingResponse::OutputTextDone
                         | ResponsesStreamingResponse::ContentPartAdded
-                        | ResponsesStreamingResponse::ContentPartDone => {
+                        | ResponsesStreamingResponse::ContentPartDone
+                        | ResponsesStreamingResponse::Unknown => {
                             // Ignore
                         }
                     }

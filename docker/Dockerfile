@@ -49,14 +49,11 @@ ENV PKG_CONFIG_ALL_STATIC=1
 RUN cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl --features check-req && \
   mv target/$(cat TARGETARCH)-unknown-linux-musl/release/ditto-bot-rust /ditto-bot-rust
 
-# Install nodejs
-RUN apk add --no-cache nodejs npm
-
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # XXX: using scratch create HOSTARCH image.
 FROM --platform=linux/${TARGETARCH} alpine
+
+# Install nodejs, uv
+RUN apk add --no-cache nodejs npm uv
 
 COPY --from=builder /ditto-bot-rust /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

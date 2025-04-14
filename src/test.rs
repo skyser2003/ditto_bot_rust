@@ -122,3 +122,89 @@ impl super::Bot for MockBot {
         todo!()
     }
 }
+
+#[tokio::test]
+async fn test_mcp_client1() -> anyhow::Result<()> {
+    use std::borrow::Cow;
+
+    use rmcp::{transport::TokioChildProcess, ServiceExt};
+    use tokio::process::Command;
+
+    let client = ()
+        .serve(TokioChildProcess::new(
+            Command::new("npx")
+                .arg("-y")
+                .arg("@modelcontextprotocol/server-everything"),
+        )?)
+        .await?;
+
+    let tools = client.list_all_tools().await?;
+    let resources = client.list_all_resources().await?;
+
+    for tool in tools {
+        println!("{:?}", tool);
+    }
+
+    for resource in resources {
+        println!("{:?}", resource);
+    }
+
+    let mut echo_args = serde_json::Map::new();
+    echo_args.insert(
+        "message".to_string(),
+        serde_json::Value::String("Hello world!".to_string()),
+    );
+
+    let res = client
+        .call_tool(rmcp::model::CallToolRequestParam {
+            name: Cow::Borrowed("echo"),
+            arguments: Some(echo_args),
+        })
+        .await?;
+
+    println!("{:?}", res);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_mcp_client2() -> anyhow::Result<()> {
+    use std::borrow::Cow;
+
+    use rmcp::{transport::TokioChildProcess, ServiceExt};
+    use tokio::process::Command;
+
+    let tz = "Asia/Seoul";
+
+    let client = ()
+        .serve(TokioChildProcess::new(
+            Command::new("uvx")
+                .arg("mcp-server-time")
+                .arg("--local-timezone")
+                .arg(tz),
+        )?)
+        .await?;
+
+    let tools = client.list_all_tools().await?;
+
+    for tool in tools {
+        println!("{:?}", tool);
+    }
+
+    let mut echo_args = serde_json::Map::new();
+    echo_args.insert(
+        "timezone".to_string(),
+        serde_json::Value::String(tz.to_string()),
+    );
+
+    let res = client
+        .call_tool(rmcp::model::CallToolRequestParam {
+            name: Cow::Borrowed("get_current_time"),
+            arguments: Some(echo_args),
+        })
+        .await?;
+
+    println!("{:?}", res);
+
+    Ok(())
+}

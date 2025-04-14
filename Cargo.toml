@@ -53,11 +53,13 @@ reqwest-eventsource = "0.5.0"
 percent-encoding = "2.3.1"
 
 rmcp = { version = "0.1", features = [
+	"client",
 	"server",
-	"transport-child-process",
-	"transport-sse",
+	"macros",
 	"transport-io",
 	"transport-sse-server",
+	"transport-child-process",
+	"transport-sse",
 ] }
 
 [features]

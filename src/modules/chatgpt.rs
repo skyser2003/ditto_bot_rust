@@ -1,4 +1,4 @@
-use std::{borrow::Cow, env};
+use std::{borrow::Cow, collections::HashMap, env};
 
 use futures::StreamExt;
 use log::{debug, error};
@@ -79,6 +79,38 @@ struct SseChoiceDelta {
 struct ResMessage {
     role: String,
     content: String,
+}
+
+#[derive(Serialize)]
+struct FunctionCallBody {
+    #[serde(rename = "type")]
+    type_field: String,
+    function: FunctionCallDetails,
+}
+
+#[derive(Serialize)]
+struct FunctionCallDetails {
+    name: String,
+    description: String,
+    parameters: FunctionCallParameters,
+    strict: bool,
+}
+
+#[derive(Serialize)]
+struct FunctionCallParameters {
+    #[serde(rename = "type")]
+    type_field: String,
+    properties: HashMap<String, FunctionCallParameter>,
+    required: Vec<String>,
+    #[serde(rename = "additionalProperties")]
+    additional_properties: bool,
+}
+
+#[derive(Serialize)]
+struct FunctionCallParameter {
+    #[serde(rename = "type")]
+    type_field: String,
+    description: String,
 }
 
 pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {

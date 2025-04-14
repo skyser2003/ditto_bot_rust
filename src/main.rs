@@ -109,6 +109,11 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     link,
                 })
             }
+            slack::InternalEvent::Message(slack::Message::TaggedMessage(_)) => {
+                Err(ConvertMessageEventError::Unsupported(
+                    "TaggedMessage event not supported".to_string(),
+                ))
+            }
             slack::InternalEvent::LinkShared(_) => Err(ConvertMessageEventError::Unsupported(
                 "LinkShared event not supported".to_string(),
             )),
@@ -419,7 +424,14 @@ async fn socket_handler(mut ws: WebSocketStream<MaybeTlsStream<TcpStream>>, bot:
         match data {
             TungsteniteMessage::Text(text) => {
                 debug!("Received text message: {:?}", text);
-                let event: slack::SlackEvent = serde_json::from_str(&text).unwrap();
+                let event = serde_json::from_str::<slack::SlackEvent>(&text);
+
+                if event.is_err() {
+                    error!("Failed to parse slack event - {:?}", event);
+                    continue;
+                }
+
+                let event = event.unwrap();
 
                 let mut envelope_id = String::new();
 

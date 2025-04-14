@@ -118,7 +118,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         msg.ts.clone()
     };
 
-    let conv_fut = bot.get_conversation_relies(&msg.channel, thread_ts.as_str());
+    let conv_fut = bot.get_conversation_replies(&msg.channel, thread_ts.as_str());
     let conv_result = conv_fut.await;
 
     let stream_mode_str = env::var("USE_GEMINI_STREAM").unwrap_or("true".to_string());

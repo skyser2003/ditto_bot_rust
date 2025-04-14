@@ -205,7 +205,7 @@ pub trait Bot {
         ts: &str,
     ) -> anyhow::Result<EditMessageResponse>;
 
-    async fn get_conversation_relies(
+    async fn get_conversation_replies(
         &self,
         channel: &str,
         ts: &str,
@@ -297,7 +297,7 @@ impl Bot for DittoBot {
         Ok(resp)
     }
 
-    async fn get_conversation_relies(
+    async fn get_conversation_replies(
         &self,
         channel: &str,
         ts: &str,

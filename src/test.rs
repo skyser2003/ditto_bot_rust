@@ -110,7 +110,7 @@ impl super::Bot for MockBot {
         })
     }
 
-    async fn get_conversation_relies(
+    async fn get_conversation_replies(
         &self,
         _channel: &str,
         _ts: &str,

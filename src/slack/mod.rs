@@ -202,7 +202,6 @@ pub struct LinkSharedMessage {
 #[serde(rename_all = "snake_case")]
 pub enum TaggedMessage {
     ChannelJoin(ChannelJoinMessage),
-    BasicMessage(BasicMessage),
     MessageChanged,
     ThreadBroadcast,
 }
@@ -210,8 +209,8 @@ pub enum TaggedMessage {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum Message {
-    TaggedMessage(TaggedMessage),
     BasicMessage(BasicMessage),
+    TaggedMessage(TaggedMessage),
     Unknown(serde_json::Value),
 }
 

@@ -9,6 +9,13 @@ use crate::{
     slack::{BlockElement, PostMessageResponse, SectionBlock, ThreadMessageType},
     Bot, Message, ReplyMessageEvent,
 };
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+#[serde(rename_all = "snake_case")]
+enum ResponsesInput {
+    Text(OpenAIChatCompletionMessage),
+    FunctionCall(ResponsesToolOutput),
+}
 
 #[derive(Debug, Serialize)]
 struct OpenAIChatCompletionMessage {
@@ -19,7 +26,7 @@ struct OpenAIChatCompletionMessage {
 #[derive(Debug, Serialize)]
 struct OpenAIResponsesBody {
     model: String,
-    input: Vec<OpenAIChatCompletionMessage>,
+    input: Vec<ResponsesInput>,
     temperature: f32,
     previous_response_id: Option<String>,
     store: bool,
@@ -27,7 +34,7 @@ struct OpenAIResponsesBody {
     tools: Vec<OpenAIResponsesTool>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum ResponsesStreamingResponse {
@@ -35,7 +42,9 @@ pub enum ResponsesStreamingResponse {
     #[serde(rename = "response.output_text.delta")]
     Delta { item_id: String, delta: String },
     #[serde(rename = "response.completed")]
-    Completed,
+    Completed {
+        response: ResponsesCompletedResponse,
+    },
     #[serde(rename = "response.created")]
     Created,
     #[serde(rename = "response.in_progress")]
@@ -43,26 +52,32 @@ pub enum ResponsesStreamingResponse {
     #[serde(rename = "response.output_item.added")]
     OutputItemAdded,
     #[serde(rename = "response.output_item.done")]
-    OutputItemDone,
+    OutputItemDone { item: ResponsesStreamingOutput },
     #[serde(rename = "response.output_text.done")]
     OutputTextDone,
     #[serde(rename = "response.content_part.added")]
     ContentPartAdded,
     #[serde(rename = "response.content_part.done")]
     ContentPartDone,
+    #[serde(rename = "response.function_call_arguments.delta")]
+    FunctionCallArgumentsDelta,
+    #[serde(rename = "response.function_call_arguments.done")]
+    FunctionCallArgumentsDone,
     #[serde(other)]
     Unknown,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ResponsesCompletedResponse {
     #[allow(dead_code)]
     id: String,
+    // If empty, skip
+    #[serde(default)]
     output: Vec<ResponsesStreamingOutput>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum ResponsesStreamingOutput {
@@ -77,9 +92,23 @@ pub enum ResponsesStreamingOutput {
         role: String,
         content: Vec<ResponsesStreamingContent>,
     },
+    FunctionCall {
+        id: String,
+        status: String,
+        arguments: String,
+        call_id: String,
+        name: String,
+    },
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
+pub enum ResponsesToolOutput {
+    FunctionCallOutput { call_id: String, output: String },
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ResponsesStreamingContent {
     #[serde(rename = "type")]
@@ -98,27 +127,20 @@ pub struct ResponsesStreamingOutputContent {
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 enum OpenAIResponsesTool {
-    Function,
+    Function(FunctionCallBody),
     #[serde(rename = "web_search_preview")]
     WebSearch,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct FunctionCallBody {
-    #[serde(rename = "type")]
-    type_field: String,
-    function: FunctionCallDetails,
-}
-
-#[derive(Serialize)]
-struct FunctionCallDetails {
     name: String,
     description: String,
     parameters: FunctionCallParameters,
     strict: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct FunctionCallParameters {
     #[serde(rename = "type")]
     type_field: String,
@@ -128,7 +150,7 @@ struct FunctionCallParameters {
     additional_properties: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct FunctionCallParameter {
     #[serde(rename = "type")]
     type_field: String,
@@ -181,11 +203,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     let stream_mode_str = env::var("USE_GPT_STREAM").unwrap_or("true".to_string());
     let stream_mode_str = stream_mode_str.to_lowercase();
 
-    let stream_mode = if stream_mode_str == "true" || stream_mode_str == "1" {
-        true
-    } else {
-        false
-    };
+    let stream_mode = stream_mode_str == "1" || stream_mode_str.to_lowercase() == "true";
 
     let openai_model = env::var("OPENAI_MODEL").unwrap_or("gpt-4o-mini".to_string());
     let temperature = if openai_model.starts_with("o") {
@@ -200,12 +218,50 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         tools.push(OpenAIResponsesTool::WebSearch);
     }
 
+    let mut sample_tool_properties = HashMap::new();
+    sample_tool_properties.insert(
+        "time_zone".to_string(),
+        FunctionCallParameter {
+            type_field: "string".to_string(),
+            description: "Time zone".to_string(),
+        },
+    );
+
+    let all_tools = bot.get_all_tools_metadata().await?;
+
+    for (unified_name, arguments, required) in all_tools {
+        let tool_call_body = FunctionCallBody {
+            name: unified_name.clone(),
+            description: format!("Call tool {}", unified_name),
+            parameters: FunctionCallParameters {
+                type_field: "object".to_string(),
+                required,
+                properties: arguments
+                    .iter()
+                    .map(|(arg_name, (arg_type, description))| {
+                        (
+                            arg_name.clone(),
+                            FunctionCallParameter {
+                                type_field: arg_type.clone(),
+                                description: description.clone(),
+                            },
+                        )
+                    })
+                    .collect::<HashMap<_, _>>(),
+                additional_properties: false,
+            },
+            strict: true,
+        };
+
+        tools.push(OpenAIResponsesTool::Function(tool_call_body));
+    }
+
     let mut openai_body = OpenAIResponsesBody {
         model: openai_model,
         input: vec![],
         temperature,
         stream: stream_mode,
-        store: false,
+        store: true,
         previous_response_id: None,
         tools,
     };
@@ -261,7 +317,10 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
                 openai_body
                     .input
-                    .push(OpenAIChatCompletionMessage { role, content });
+                    .push(ResponsesInput::Text(OpenAIChatCompletionMessage {
+                        role,
+                        content,
+                    }));
             });
         }
     };
@@ -269,10 +328,10 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     if openai_body.input.len() == 0 {
         error!("Error! no thread found");
 
-        openai_body.input = vec![OpenAIChatCompletionMessage {
+        openai_body.input = vec![ResponsesInput::Text(OpenAIChatCompletionMessage {
             role: "user".to_string(),
             content: input_text,
-        }];
+        })];
     }
 
     let reply_event = Some(ReplyMessageEvent {
@@ -291,7 +350,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         let mut gpt_message = GptMessageManager::new(&msg.channel, reply_event.clone());
         let mut initial_received = false;
 
-        let mut openai_sse = EventSource::new(openai_builder.try_clone().unwrap())?;
+        let mut openai_sse = EventSource::new(openai_builder)?;
 
         while let Some(event) = openai_sse.next().await {
             match &event {
@@ -342,28 +401,71 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                                 return Ok(());
                             }
                         }
-                        ResponsesStreamingResponse::Completed => {
+                        ResponsesStreamingResponse::Completed { response } => {
                             debug!("OpenAI SSE received {}", data);
 
-                            gpt_message.concat_message(&format!(" `{}`", "[DONE]"));
+                            let mut function_calls = vec![];
 
-                            let sent = gpt_message.stream_message(bot, None).await;
+                            for item in response.output {
+                                match item {
+                                    ResponsesStreamingOutput::Message {
+                                        id: _,
+                                        status: _,
+                                        role: _,
+                                        content: _,
+                                    } => {}
+                                    ResponsesStreamingOutput::Reasoning { id: _ } => {}
+                                    ResponsesStreamingOutput::FunctionCall {
+                                        id: _,
+                                        status: _,
+                                        arguments,
+                                        call_id,
+                                        name,
+                                    } => {
+                                        let function_call =
+                                            get_function_call(bot, &name, &call_id, &arguments)
+                                                .await?;
 
-                            if sent.is_err() {
-                                error!("OpenAI SSE stream {} sending failed: {:?}", data, sent);
+                                        function_calls.push(function_call);
+                                    }
+                                }
                             }
 
-                            break;
+                            if function_calls.is_empty() {
+                                gpt_message.concat_message(&format!(" `{}`", "[DONE]"));
+
+                                let sent = gpt_message.stream_message(bot, None).await;
+
+                                if sent.is_err() {
+                                    error!("OpenAI SSE stream {} sending failed: {:?}", data, sent);
+                                }
+
+                                break;
+                            } else {
+                                openai_body.previous_response_id = Some(response.id);
+                                openai_body.input.extend(function_calls);
+
+                                let builder = openai_req
+                                    .post(chat_url)
+                                    .bearer_auth(bot.openai_key())
+                                    .json(&openai_body);
+
+                                openai_sse = EventSource::new(builder)?;
+                            }
                         }
+                        ResponsesStreamingResponse::OutputItemDone { item: _ } => {}
                         ResponsesStreamingResponse::Created
                         | ResponsesStreamingResponse::InProgress
                         | ResponsesStreamingResponse::OutputItemAdded
-                        | ResponsesStreamingResponse::OutputItemDone
                         | ResponsesStreamingResponse::OutputTextDone
                         | ResponsesStreamingResponse::ContentPartAdded
                         | ResponsesStreamingResponse::ContentPartDone
-                        | ResponsesStreamingResponse::Unknown => {
+                        | ResponsesStreamingResponse::FunctionCallArgumentsDelta
+                        | ResponsesStreamingResponse::FunctionCallArgumentsDone => {
                             // Ignore
+                        }
+                        ResponsesStreamingResponse::Unknown => {
+                            error!("OpenAI SSE unknown event: {:?}", data);
                         }
                     }
                 }
@@ -378,82 +480,147 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
         Ok(())
     } else {
-        let openai_res = openai_builder.send().await;
+        let mut openai_res = openai_builder.send().await;
 
-        if openai_res.is_err() {
-            let debug_str = "OpenAI API call failed";
-            debug!("{}", debug_str);
+        loop {
+            if openai_res.is_err() {
+                let debug_str = "OpenAI API call failed";
+                debug!("{}", debug_str);
 
-            return bot
-                .send_message(
+                return bot
+                    .send_message(
+                        &msg.channel,
+                        Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(
+                            debug_str,
+                        ))]),
+                        reply_event,
+                        None,
+                    )
+                    .await
+                    .and(Ok(()));
+            }
+
+            let res = openai_res.unwrap();
+            let res_len = res.content_length().unwrap_or(0);
+
+            let res_bytes = res.bytes().await;
+
+            if res_bytes.is_err() {
+                let debug_str = format!("OpenAI result bytes error: {}", res_len);
+                debug!("{}", debug_str);
+
+                return bot
+                    .send_message(
+                        &msg.channel,
+                        Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(
+                            &debug_str,
+                        ))]),
+                        reply_event,
+                        None,
+                    )
+                    .await
+                    .and(Ok(()));
+            }
+
+            let res_bytes = res_bytes.unwrap();
+
+            let res_body_result = serde_json::from_slice::<ResponsesCompletedResponse>(&res_bytes);
+
+            if res_body_result.is_err() {
+                let debug_str = format!(
+                    "OpenAI result json parsing failed: {:?}",
+                    String::from_utf8(res_bytes.to_vec()).unwrap()
+                );
+
+                error!("{}", debug_str);
+
+                return bot
+                    .send_message(
+                        &msg.channel,
+                        Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(
+                            &debug_str,
+                        ))]),
+                        reply_event,
+                        None,
+                    )
+                    .await
+                    .and(Ok(()));
+            }
+
+            let res_body = res_body_result.unwrap();
+
+            let mut res_texts = vec![];
+            let mut function_calls = vec![];
+
+            for output in &res_body.output {
+                match output {
+                    ResponsesStreamingOutput::Message {
+                        id: _,
+                        status: _,
+                        role: _,
+                        content,
+                    } => res_texts.push(content[0].text.clone()),
+                    ResponsesStreamingOutput::Reasoning { id: _ } => {}
+                    ResponsesStreamingOutput::FunctionCall {
+                        id: _,
+                        status: _,
+                        arguments,
+                        call_id,
+                        name,
+                    } => {
+                        let function_call =
+                            get_function_call(bot, name, call_id, arguments).await?;
+
+                        function_calls.push(function_call);
+                    }
+                }
+            }
+
+            if !function_calls.is_empty() {
+                openai_body.previous_response_id = Some(res_body.id);
+                openai_body.input.extend(function_calls);
+
+                let openai_builder = openai_req
+                    .post(chat_url)
+                    .bearer_auth(bot.openai_key())
+                    .json(&openai_body);
+
+                openai_res = openai_builder.send().await;
+
+                continue;
+            } else {
+                let res_text = res_texts.join("\n");
+
+                return GptMessageManager::send_message_static(
+                    bot,
+                    &res_text,
                     &msg.channel,
-                    Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(debug_str))]),
-                    reply_event,
-                    None,
+                    &reply_event,
                 )
                 .await
                 .and(Ok(()));
+            }
         }
-
-        let res = openai_res.unwrap();
-        let res_len = res.content_length().unwrap_or(0);
-
-        let res_bytes = res.bytes().await;
-
-        if res_bytes.is_err() {
-            let debug_str = format!("OpenAI result bytes error: {}", res_len);
-            debug!("{}", debug_str);
-
-            return bot
-                .send_message(
-                    &msg.channel,
-                    Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(&debug_str))]),
-                    reply_event,
-                    None,
-                )
-                .await
-                .and(Ok(()));
-        }
-
-        let res_bytes = res_bytes.unwrap();
-
-        let res_body_result = serde_json::from_slice::<ResponsesCompletedResponse>(&res_bytes);
-
-        if res_body_result.is_err() {
-            let debug_str = format!(
-                "OpenAI result json parsing failed: {:?}",
-                String::from_utf8(res_bytes.to_vec()).unwrap()
-            );
-
-            error!("{}", debug_str);
-
-            return bot
-                .send_message(
-                    &msg.channel,
-                    Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(&debug_str))]),
-                    reply_event,
-                    None,
-                )
-                .await
-                .and(Ok(()));
-        }
-
-        let res_body = res_body_result.unwrap();
-
-        let res_text = match &res_body.output[1] {
-            ResponsesStreamingOutput::Message {
-                id: _,
-                status: _,
-                role: _,
-                content,
-            } => content[0].text.clone(),
-            ResponsesStreamingOutput::Reasoning { id: _ } => "".to_string(),
-        };
-
-        GptMessageManager::send_message_static(bot, &res_text, &msg.channel, &reply_event)
-            .await
-            .and(Ok(()))
     }
+}
+
+async fn get_function_call<B: Bot>(
+    bot: &B,
+    name: &String,
+    call_id: &String,
+    arguments: &String,
+) -> anyhow::Result<ResponsesInput> {
+    let arguments: HashMap<String, serde_json::Value> =
+        serde_json::from_str(&arguments).unwrap_or_else(|_| HashMap::new());
+
+    let tool_result = bot.call_mcp_tool(name, arguments).await?;
+
+    let tool_output = ResponsesToolOutput::FunctionCallOutput {
+        call_id: call_id.clone(),
+        output: tool_result,
+    };
+
+    Ok(ResponsesInput::FunctionCall(tool_output))
 }
 
 // TODO save bot as member?

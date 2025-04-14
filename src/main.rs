@@ -12,6 +12,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
+use rmcp::model::CallToolRequestParam;
 use rmcp::service::RunningService;
 use rmcp::transport::TokioChildProcess;
 use rmcp::Peer;
@@ -23,6 +24,7 @@ use slack::EditMessageResponse;
 use slack::PostMessage;
 use slack::PostMessageResponse;
 use slack::SlackSocketOutput;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::{
@@ -220,6 +222,16 @@ pub trait Bot {
         ts: &str,
     ) -> anyhow::Result<ConversationReplyResponse>;
     fn redis(&self) -> anyhow::Result<redis::Connection>;
+
+    async fn get_all_tools_metadata(
+        &self,
+    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, Vec<String>)>>;
+
+    async fn call_mcp_tool(
+        &self,
+        name: &str,
+        arguments: HashMap<String, serde_json::Value>,
+    ) -> anyhow::Result<String>;
 }
 
 struct DittoBot {
@@ -230,7 +242,7 @@ struct DittoBot {
     http_client: reqwest::Client,
     redis_client: redis::Client,
     mcp_clients: HashMap<String, McpClient>,
-    mcp_tools: HashMap<String, Peer<RoleClient>>,
+    mcp_tools: HashMap<String, (Cow<'static, str>, Peer<RoleClient>)>,
 }
 
 impl DittoBot {
@@ -248,8 +260,8 @@ impl DittoBot {
             let tools = client.list_all_tools().await.unwrap_or_default();
 
             for tool in tools {
-                let unified_name = format!("{}:{}", name, tool.name);
-                mcp_tools.insert(unified_name, client.peer().clone());
+                let unified_name = format!("{}_{}", name, tool.name);
+                mcp_tools.insert(unified_name, (tool.name, client.peer().clone()));
             }
         }
 
@@ -402,6 +414,89 @@ impl Bot for DittoBot {
         self.redis_client
             .get_connection()
             .context("Failed to get redis connection")
+    }
+
+    async fn get_all_tools_metadata(
+        &self,
+    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, Vec<String>)>> {
+        let mut datas = vec![];
+
+        for (name, client) in self.mcp_clients.iter() {
+            let tools = client
+                .list_all_tools()
+                .await
+                .context("Failed to list all tools")?;
+
+            for tool in tools {
+                let unified_name = format!("{}_{}", name, tool.name);
+
+                let properties: &serde_json::Map<String, serde_json::Value> =
+                    tool.input_schema["properties"].as_object().unwrap();
+
+                let required = tool.input_schema["required"].as_array().unwrap();
+                let required = required
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_string())
+                    .collect::<Vec<_>>();
+
+                let arguments = properties
+                    .keys()
+                    .map(|arg_name| {
+                        let value = properties.get(arg_name).unwrap();
+                        let arg_type = value["type"].as_str().unwrap_or("string");
+                        let description = value["description"].as_str().unwrap_or("");
+
+                        (
+                            arg_name.to_string(),
+                            (arg_type.to_string(), description.to_string()),
+                        )
+                    })
+                    .collect::<HashMap<String, (String, String)>>();
+
+                datas.push((unified_name, arguments, required));
+            }
+        }
+
+        Ok(datas)
+    }
+
+    async fn call_mcp_tool(
+        &self,
+        unified_name: &str,
+        arguments: HashMap<String, serde_json::Value>,
+    ) -> anyhow::Result<String> {
+        let (tool_name, client) = self
+            .mcp_tools
+            .get(unified_name)
+            .ok_or_else(|| anyhow!("MCP tool not found"))?;
+
+        let mut tool_arguments = serde_json::Map::new();
+
+        for (key, value) in arguments.iter() {
+            tool_arguments.insert(key.clone(), value.clone());
+        }
+
+        let params = CallToolRequestParam {
+            name: tool_name.clone(),
+            arguments: Some(tool_arguments),
+        };
+
+        let result = client
+            .call_tool(params)
+            .await
+            .context("Failed to call MCP tool")?;
+
+        for content in result.content {
+            let text = content.as_text();
+
+            if let Some(text) = text {
+                return Ok(text.text.clone());
+            }
+        }
+
+        error!("No text found in the result content.");
+
+        Ok("".to_string())
     }
 }
 

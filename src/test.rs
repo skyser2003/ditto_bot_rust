@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use std::sync::RwLock;
+use std::{collections::HashMap, sync::RwLock};
 
 use crate::{
     slack::{ConversationReplyResponse, EditMessageResponse, PostMessageResponse},
@@ -120,6 +120,20 @@ impl super::Bot for MockBot {
 
     fn redis(&self) -> anyhow::Result<redis::Connection> {
         todo!()
+    }
+
+    async fn call_mcp_tool(
+        &self,
+        _unified_name: &str,
+        _arguments: HashMap<String, serde_json::Value>,
+    ) -> anyhow::Result<String> {
+        Err(anyhow!("Not implemented!"))
+    }
+
+    async fn get_all_tools_metadata(
+        &self,
+    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, Vec<String>)>> {
+        Err(anyhow!("Not implemented!"))
     }
 }
 

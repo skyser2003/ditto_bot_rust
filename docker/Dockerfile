@@ -53,7 +53,7 @@ RUN cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl --featur
 FROM --platform=linux/${TARGETARCH} alpine
 
 # Install nodejs, uv
-RUN apk add --no-cache nodejs npm uv
+RUN apk add --no-cache nodejs npm uv python3
 
 COPY --from=builder /ditto-bot-rust /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

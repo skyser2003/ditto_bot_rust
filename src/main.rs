@@ -12,6 +12,10 @@ use futures::SinkExt;
 use futures::StreamExt;
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
+use rmcp::service::RunningService;
+use rmcp::transport::TokioChildProcess;
+use rmcp::RoleClient;
+use rmcp::ServiceExt;
 use slack::ConversationReplyResponse;
 use slack::EditMessage;
 use slack::EditMessageResponse;
@@ -24,6 +28,7 @@ use std::{
     env,
 };
 use tokio::net::TcpStream;
+use tokio::process::Command;
 use tokio_tungstenite::tungstenite::Utf8Bytes;
 use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::WebSocketStream;
@@ -220,6 +225,7 @@ struct DittoBot {
     gemini_key: String,
     http_client: reqwest::Client,
     redis_client: redis::Client,
+    mcp_clients: Vec<rmcp::service::RunningService<rmcp::RoleClient, ()>>,
 }
 
 impl DittoBot {
@@ -229,6 +235,7 @@ impl DittoBot {
         openai_key: String,
         gemini_key: String,
         redis_client: redis::Client,
+        mcp_clients: Vec<RunningService<RoleClient, ()>>,
     ) -> Self {
         Self {
             bot_id,
@@ -237,7 +244,36 @@ impl DittoBot {
             gemini_key,
             http_client: reqwest::Client::new(),
             redis_client,
+            mcp_clients,
         }
+    }
+
+    async fn create_mcp_clients(tz: String) -> Vec<RunningService<RoleClient, ()>> {
+        let mut results = vec![];
+
+        let client1 = async move {
+            ().serve(TokioChildProcess::new(
+                Command::new("uvx")
+                    .arg("mcp-server-time")
+                    .arg("--local-timezone")
+                    .arg(tz),
+            )?)
+            .await
+        }
+        .await;
+
+        results.push(client1);
+
+        results
+            .into_iter()
+            .filter_map(|result| match result {
+                Ok(client) => Some(client),
+                Err(e) => {
+                    error!("Failed to create mcp client - {:?}", e);
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -604,6 +640,8 @@ async fn main() -> anyhow::Result<()> {
     let socket_mode = env::var("SOCKET_MODE").unwrap_or("0".to_string());
     info!("Socket mode: {:?}", socket_mode);
 
+    let tz = env::var("TZ").unwrap_or("Asia/Seoul".to_string());
+
     let is_socket_mode = socket_mode == "1" || socket_mode.to_lowercase() == "true";
     info!("Is socket mode: {:?}", is_socket_mode);
 
@@ -612,6 +650,8 @@ async fn main() -> anyhow::Result<()> {
         axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
     );
 
+    let mcp_clients = DittoBot::create_mcp_clients(tz).await;
+
     let bot = Arc::new(DittoBot::new(
         bot_id.clone(),
         bot_token.clone(),
@@ -619,6 +659,7 @@ async fn main() -> anyhow::Result<()> {
         gemini_key.clone(),
         redis::Client::open(format!("redis://{}", redis_address))
             .context("Failed to create redis client")?,
+        mcp_clients,
     ));
 
     if is_socket_mode {

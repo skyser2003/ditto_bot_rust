@@ -17,68 +17,78 @@ struct OpenAIChatCompletionMessage {
 }
 
 #[derive(Debug, Serialize)]
-struct OpenAIChatCompletionBody {
+struct OpenAIResponsesBody {
     model: String,
-    messages: Vec<OpenAIChatCompletionMessage>,
+    input: Vec<OpenAIChatCompletionMessage>,
     temperature: f32,
+    previous_response_id: Option<String>,
+    store: bool,
     stream: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize)]
-struct ResChatCompletion {
+#[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
+pub enum ResponsesStreamingResponse {
+    #[allow(dead_code)]
+    #[serde(rename = "response.output_text.delta")]
+    Delta { item_id: String, delta: String },
+    #[serde(rename = "response.completed")]
+    Completed,
+    #[serde(rename = "response.created")]
+    Created,
+    #[serde(rename = "response.in_progress")]
+    InProgress,
+    #[serde(rename = "response.output_item.added")]
+    OutputItemAdded,
+    #[serde(rename = "response.output_item.done")]
+    OutputItemDone,
+    #[serde(rename = "response.output_text.done")]
+    OutputTextDone,
+    #[serde(rename = "response.content_part.added")]
+    ContentPartAdded,
+    #[serde(rename = "response.content_part.done")]
+    ContentPartDone,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ResponsesCompletedResponse {
+    #[allow(dead_code)]
     id: String,
-    object: String,
-    created: i64,
-    model: String,
-    usage: ResUsage,
-    choices: Vec<ResChoice>,
+    output: Vec<ResponsesStreamingOutput>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-struct SseChatCompletion {
-    id: String,
-    object: String,
-    created: i64,
-    model: String,
-    choices: Vec<SseChoice>,
-}
-
-#[allow(dead_code)]
 #[derive(Deserialize)]
-struct ResUsage {
-    prompt_tokens: i32,
-    completion_tokens: i32,
-    total_tokens: i32,
+#[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
+pub enum ResponsesStreamingOutput {
+    Reasoning {
+        #[allow(dead_code)]
+        id: String,
+    },
+    #[allow(dead_code)]
+    Message {
+        id: String,
+        status: String,
+        role: String,
+        content: Vec<ResponsesStreamingContent>,
+    },
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize)]
-struct ResChoice {
-    message: ResMessage,
-    finish_reason: Option<String>,
-    index: i32,
+#[serde(rename_all = "snake_case")]
+pub struct ResponsesStreamingContent {
+    #[serde(rename = "type")]
+    type_field: String,
+    text: String,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-struct SseChoice {
-    delta: SseChoiceDelta,
-    finish_reason: Option<String>,
-    index: i32,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct SseChoiceDelta {
-    content: Option<String>,
-}
-
-#[allow(dead_code)]
 #[derive(Deserialize)]
-struct ResMessage {
-    role: String,
-    content: String,
+pub struct ResponsesStreamingOutputContent {
+    #[serde(rename = "type")]
+    type_field: String,
+    text: String,
 }
 
 #[derive(Serialize)]
@@ -172,11 +182,13 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         gpt_split[1].parse::<f32>().unwrap_or(0.0)
     };
 
-    let mut openai_body = OpenAIChatCompletionBody {
+    let mut openai_body = OpenAIResponsesBody {
         model: openai_model,
-        messages: vec![],
+        input: vec![],
         temperature,
         stream: stream_mode,
+        store: false,
+        previous_response_id: None,
     };
 
     if let Ok(conv_res) = conv_result {
@@ -229,16 +241,16 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                 let role = role.to_string();
 
                 openai_body
-                    .messages
+                    .input
                     .push(OpenAIChatCompletionMessage { role, content });
             });
         }
     };
 
-    if openai_body.messages.len() == 0 {
+    if openai_body.input.len() == 0 {
         error!("Error! no thread found");
 
-        openai_body.messages = vec![OpenAIChatCompletionMessage {
+        openai_body.input = vec![OpenAIChatCompletionMessage {
             role: "user".to_string(),
             content: input_text,
         }];
@@ -249,7 +261,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         broadcast: true,
     });
 
-    let chat_url = "https://api.openai.com/v1/chat/completions";
+    let chat_url = "https://api.openai.com/v1/responses";
 
     let openai_builder = openai_req
         .post(chat_url)
@@ -263,73 +275,81 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         let mut openai_sse = EventSource::new(openai_builder.try_clone().unwrap())?;
 
         while let Some(event) = openai_sse.next().await {
-            match event {
+            match &event {
                 Ok(Event::Open) => {
                     debug!("OpenAI SSE opened");
                 }
                 Ok(Event::Message(event)) => {
-                    let data = event.data;
+                    let data = event.data.clone();
 
-                    if data == "[DONE]" {
-                        debug!("OpenAI SSE received {}", data);
-
-                        gpt_message.concat_message(&format!(" `{}`", data));
-
-                        let sent = gpt_message.stream_message(bot, None).await;
-
-                        if sent.is_err() {
-                            error!("OpenAI SSE stream {} sending failed: {:?}", data, sent);
-                        }
-
-                        break;
-                    }
-
-                    let sse_res = serde_json::from_str::<SseChatCompletion>(&data);
+                    let sse_res = serde_json::from_str::<ResponsesStreamingResponse>(&data);
 
                     if sse_res.is_err() {
                         error!("OpenAI SSE json parsing failed: {:?}", data);
                         continue;
                     }
 
-                    let sse_res_json = sse_res.unwrap();
-                    let message_opt = sse_res_json.choices[0].delta.clone().content;
+                    let sse_res = sse_res.unwrap();
 
-                    if message_opt.is_none() {
-                        continue;
-                    }
+                    match sse_res {
+                        ResponsesStreamingResponse::Delta { item_id: _, delta } => {
+                            debug!("OpenAI SSE delta: {:?}", delta);
 
-                    let diff_message = message_opt.unwrap();
+                            if !initial_received {
+                                initial_received = true;
 
-                    if !initial_received {
-                        initial_received = true;
+                                match gpt_message
+                                    .stream_message(bot, Some("`Receiving...`"))
+                                    .await
+                                {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("OpenAI SSE stream message sending failed: {:?}", e);
+                                    }
+                                }
+                            }
 
-                        match gpt_message
-                            .stream_message(bot, Some("`Receiving...`"))
-                            .await
-                        {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("OpenAI SSE stream message sending failed: {:?}", e);
+                            gpt_message.concat_message(&delta);
+
+                            if ![",", ".", "?", "!", "\n"].contains(&delta.as_str()) {
+                                continue;
+                            }
+
+                            let sent = gpt_message.stream_message(bot, Some(" `[continue]`")).await;
+
+                            if sent.is_err() {
+                                error!("OpenAI SSE stream message sending failed: {:?}", sent);
+
+                                return Ok(());
                             }
                         }
-                    }
+                        ResponsesStreamingResponse::Completed => {
+                            debug!("OpenAI SSE received {}", data);
 
-                    gpt_message.concat_message(&diff_message);
+                            gpt_message.concat_message(&format!(" `{}`", "[DONE]"));
 
-                    if ![",", ".", "?", "!", "\n"].contains(&diff_message.as_str()) {
-                        continue;
-                    }
+                            let sent = gpt_message.stream_message(bot, None).await;
 
-                    let sent = gpt_message.stream_message(bot, Some(" `[continue]`")).await;
+                            if sent.is_err() {
+                                error!("OpenAI SSE stream {} sending failed: {:?}", data, sent);
+                            }
 
-                    if sent.is_err() {
-                        error!("OpenAI SSE stream message sending failed: {:?}", sent);
-
-                        return Ok(());
+                            break;
+                        }
+                        ResponsesStreamingResponse::Created
+                        | ResponsesStreamingResponse::InProgress
+                        | ResponsesStreamingResponse::OutputItemAdded
+                        | ResponsesStreamingResponse::OutputItemDone
+                        | ResponsesStreamingResponse::OutputTextDone
+                        | ResponsesStreamingResponse::ContentPartAdded
+                        | ResponsesStreamingResponse::ContentPartDone => {
+                            // Ignore
+                        }
                     }
                 }
                 Err(e) => {
-                    error!("OpenAI SSE body: {:?}", openai_body);
+                    error!("OpenAI SSE body: {:?}", serde_json::to_string(&openai_body));
+                    error!("OpenAI SSE event: {:?}", event);
                     error!("OpenAI SSE error: {:?}", e);
                     break;
                 }
@@ -377,7 +397,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
         let res_bytes = res_bytes.unwrap();
 
-        let res_body_result = serde_json::from_slice::<ResChatCompletion>(&res_bytes);
+        let res_body_result = serde_json::from_slice::<ResponsesCompletedResponse>(&res_bytes);
 
         if res_body_result.is_err() {
             let debug_str = format!(
@@ -385,7 +405,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                 String::from_utf8(res_bytes.to_vec()).unwrap()
             );
 
-            debug!("{}", debug_str);
+            error!("{}", debug_str);
 
             return bot
                 .send_message(
@@ -400,13 +420,15 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
         let res_body = res_body_result.unwrap();
 
-        let res_text = if res_body.choices.len() == 0 {
-            "ditto_bot Error: "
-        } else {
-            &res_body.choices[0].message.content
+        let res_text = match &res_body.output[1] {
+            ResponsesStreamingOutput::Message {
+                id: _,
+                status: _,
+                role: _,
+                content,
+            } => content[0].text.clone(),
+            ResponsesStreamingOutput::Reasoning { id: _ } => "".to_string(),
         };
-
-        let res_text = res_text.trim_start();
 
         GptMessageManager::send_message_static(bot, &res_text, &msg.channel, &reply_event)
             .await

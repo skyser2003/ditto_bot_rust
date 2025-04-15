@@ -26,6 +26,7 @@ use slack::PostMessageResponse;
 use slack::SlackSocketOutput;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::{
     convert::{TryFrom, TryInto},
@@ -225,7 +226,7 @@ pub trait Bot {
 
     async fn get_all_tools_metadata(
         &self,
-    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, Vec<String>)>>;
+    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>>;
 
     async fn call_mcp_tool(
         &self,
@@ -418,7 +419,7 @@ impl Bot for DittoBot {
 
     async fn get_all_tools_metadata(
         &self,
-    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, Vec<String>)>> {
+    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>> {
         let mut datas = vec![];
 
         for (name, client) in self.mcp_clients.iter() {
@@ -437,7 +438,7 @@ impl Bot for DittoBot {
                 let required = required
                     .iter()
                     .map(|v| v.as_str().unwrap().to_string())
-                    .collect::<Vec<_>>();
+                    .collect::<HashSet<_>>();
 
                 let arguments = properties
                     .keys()

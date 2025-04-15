@@ -155,7 +155,7 @@ struct FunctionCallParameters {
 #[derive(Debug, Serialize)]
 struct FunctionCallParameter {
     #[serde(rename = "type")]
-    type_field: String,
+    type_field: Vec<String>,
     description: String,
 }
 
@@ -228,14 +228,22 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
             description: format!("Call tool {}", unified_name),
             parameters: FunctionCallParameters {
                 type_field: "object".to_string(),
-                required,
+                required: arguments.keys().cloned().collect(),
                 properties: arguments
                     .iter()
                     .map(|(arg_name, (arg_type, description))| {
+                        let is_optional = required.contains(arg_name);
+
+                        let type_field = if is_optional {
+                            vec![arg_type.clone(), "null".to_string()]
+                        } else {
+                            vec![arg_type.clone()]
+                        };
+
                         (
                             arg_name.clone(),
                             FunctionCallParameter {
-                                type_field: arg_type.clone(),
+                                type_field,
                                 description: description.clone(),
                             },
                         )

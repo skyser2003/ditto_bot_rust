@@ -1,5 +1,8 @@
 use anyhow::anyhow;
-use std::{collections::HashMap, sync::RwLock};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::RwLock,
+};
 
 use crate::{
     slack::{ConversationReplyResponse, EditMessageResponse, PostMessageResponse},
@@ -132,7 +135,7 @@ impl super::Bot for MockBot {
 
     async fn get_all_tools_metadata(
         &self,
-    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, Vec<String>)>> {
+    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>> {
         Err(anyhow!("Not implemented!"))
     }
 }

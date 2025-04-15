@@ -99,6 +99,8 @@ pub enum ResponsesStreamingOutput {
         call_id: String,
         name: String,
     },
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Serialize)]
@@ -428,6 +430,9 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
                                         function_calls.push(function_call);
                                     }
+                                    ResponsesStreamingOutput::Unknown => {
+                                        error!("OpenAI SSE unknown output: {:?}", data);
+                                    }
                                 }
                             }
 
@@ -465,7 +470,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                             // Ignore
                         }
                         ResponsesStreamingResponse::Unknown => {
-                            error!("OpenAI SSE unknown event: {:?}", data);
+                            error!("OpenAI SSE unknown response: {:?}", data);
                         }
                     }
                 }
@@ -580,6 +585,9 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                             get_function_call(bot, name, call_id, arguments).await?;
 
                         function_calls.push(function_call);
+                    }
+                    ResponsesStreamingOutput::Unknown => {
+                        error!("OpenAI SSE unknown output: {:?}", res_body);
                     }
                 }
             }

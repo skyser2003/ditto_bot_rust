@@ -470,9 +470,17 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                     }
                 }
                 Err(e) => {
-                    error!("OpenAI SSE body: {:?}", serde_json::to_string(&openai_body));
-                    error!("OpenAI SSE event: {:?}", event);
-                    error!("OpenAI SSE error: {:?}", e);
+                    match e {
+                        reqwest_eventsource::Error::StreamEnded => {
+                            debug!("OpenAI SSE stream ended");
+                        }
+                        _ => {
+                            error!("OpenAI SSE body: {:?}", serde_json::to_string(&openai_body));
+                            error!("OpenAI SSE event: {:?}", event);
+                            error!("OpenAI SSE error: {:?}", e);
+                        }
+                    }
+
                     break;
                 }
             }

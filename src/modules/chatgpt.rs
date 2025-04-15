@@ -52,7 +52,7 @@ pub enum ResponsesStreamingResponse {
     #[serde(rename = "response.output_item.added")]
     OutputItemAdded,
     #[serde(rename = "response.output_item.done")]
-    OutputItemDone { item: ResponsesStreamingOutput },
+    OutputItemDone,
     #[serde(rename = "response.output_text.done")]
     OutputTextDone,
     #[serde(rename = "response.content_part.added")]
@@ -93,7 +93,9 @@ pub enum ResponsesStreamingOutput {
         content: Vec<ResponsesStreamingContent>,
     },
     FunctionCall {
+        #[allow(dead_code)]
         id: String,
+        #[allow(dead_code)]
         status: String,
         arguments: String,
         call_id: String,
@@ -113,13 +115,7 @@ pub enum ResponsesToolOutput {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ResponsesStreamingContent {
-    #[serde(rename = "type")]
-    type_field: String,
-    text: String,
-}
-
-#[derive(Deserialize)]
-pub struct ResponsesStreamingOutputContent {
+    #[allow(dead_code)]
     #[serde(rename = "type")]
     type_field: String,
     text: String,
@@ -457,10 +453,10 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                                 openai_sse = EventSource::new(builder)?;
                             }
                         }
-                        ResponsesStreamingResponse::OutputItemDone { item: _ } => {}
                         ResponsesStreamingResponse::Created
                         | ResponsesStreamingResponse::InProgress
                         | ResponsesStreamingResponse::OutputItemAdded
+                        | ResponsesStreamingResponse::OutputItemDone
                         | ResponsesStreamingResponse::OutputTextDone
                         | ResponsesStreamingResponse::ContentPartAdded
                         | ResponsesStreamingResponse::ContentPartDone

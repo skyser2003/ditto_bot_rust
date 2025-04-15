@@ -292,7 +292,16 @@ impl DittoBot {
         }
         .await;
 
+        let client2 = async move {
+            ().serve(TokioChildProcess::new(
+                Command::new("uvx").arg("mcp-server-fetch"),
+            )?)
+            .await
+        }
+        .await;
+
         results.insert("mcp-server-time", client1);
+        results.insert("mcp-server-fetch", client2);
 
         results
             .into_iter()

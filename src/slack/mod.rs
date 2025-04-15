@@ -128,6 +128,9 @@ pub enum BlockElement {
     RichTextSection {
         elements: Vec<BlockElement>,
     },
+    RichTextFormatted {
+        elements: Vec<BlockElement>,
+    },
     Text {
         text: String,
     },
@@ -139,6 +142,8 @@ pub enum BlockElement {
     Actions(ActionBlock),
     Image(ImageBlock),
     Link(LinkBlock),
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Deserialize)]

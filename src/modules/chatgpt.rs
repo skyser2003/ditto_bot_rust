@@ -220,15 +220,6 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         tools.push(OpenAIResponsesTool::WebSearch);
     }
 
-    let mut sample_tool_properties = HashMap::new();
-    sample_tool_properties.insert(
-        "time_zone".to_string(),
-        FunctionCallParameter {
-            type_field: "string".to_string(),
-            description: "Time zone".to_string(),
-        },
-    );
-
     let all_tools = bot.get_all_tools_metadata().await?;
 
     for (unified_name, arguments, required) in all_tools {

@@ -219,6 +219,7 @@ pub enum Message {
 #[serde(rename_all = "snake_case")]
 pub enum InternalEvent {
     Message(Message),
+    RichText(Message),
     LinkShared(LinkSharedMessage),
     AppMention,
 }

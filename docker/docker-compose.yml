@@ -10,7 +10,6 @@ services:
       - SLACK_BOT_TOKEN=$SLACK_BOT_TOKEN
       - SLACK_APP_TOKEN=$SLACK_APP_TOKEN
       - SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET
-      - REDIS_ADDRESS=$REDIS_ADDRESS
       - RUST_LOG=$RUST_LOG
       - BOT_ID=$BOT_ID
       - OPENAI_KEY=$OPENAI_KEY
@@ -21,13 +20,3 @@ services:
       - TZ=$TZ
     ports:
       - 2525:8082
-  redis:
-    image: redis:alpine
-    command: redis-server --appendonly yes
-    hostname: redis
-    ports:
-      - 6379:6379
-    volumes:
-      - redis-data:/data
-volumes:
-  redis-data:

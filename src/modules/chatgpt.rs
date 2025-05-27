@@ -128,6 +128,7 @@ enum OpenAIResponsesTool {
     Function(FunctionCallBody),
     #[serde(rename = "web_search_preview")]
     WebSearch,
+    CodeInterpreter(CodeInterpreterBody),
 }
 
 #[derive(Debug, Serialize)]
@@ -153,6 +154,21 @@ struct FunctionCallParameter {
     #[serde(rename = "type")]
     type_field: Vec<String>,
     description: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodeInterpreterBody {
+    pub container: CodeInterpreterContainerType,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum CodeInterpreterContainerType {
+    Auto {
+        r#type: &'static str,
+    },
+    #[allow(dead_code)]
+    ContainerId(String),
 }
 
 pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
@@ -211,6 +227,13 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     };
 
     let mut tools = vec![];
+
+    // Unused for now
+    if false {
+        tools.push(OpenAIResponsesTool::CodeInterpreter(CodeInterpreterBody {
+            container: CodeInterpreterContainerType::Auto { r#type: "auto" },
+        }));
+    }
 
     if !openai_model.starts_with("o") {
         tools.push(OpenAIResponsesTool::WebSearch);

@@ -350,7 +350,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         let mut openai_sse = EventSource::new(openai_builder)?;
 
         while let Some(event) = openai_sse.next().await {
-            match &event {
+            match event {
                 Ok(Event::Open) => {
                     debug!("OpenAI SSE opened");
                 }
@@ -474,9 +474,17 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
                         reqwest_eventsource::Error::StreamEnded => {
                             debug!("OpenAI SSE stream ended");
                         }
+                        reqwest_eventsource::Error::InvalidStatusCode(code, err_res) => {
+                            error!("OpenAI SSE error code: {}", code);
+                            error!("OpenAI SSE body: {:?}", serde_json::to_string(&openai_body));
+
+                            match err_res.text().await {
+                                Ok(body) => error!("OpenAI SSE error res body: {}", body),
+                                Err(e) => error!("Failed to read error res body: {:?}", e),
+                            }
+                        }
                         _ => {
                             error!("OpenAI SSE body: {:?}", serde_json::to_string(&openai_body));
-                            error!("OpenAI SSE event: {:?}", event);
                             error!("OpenAI SSE error: {:?}", e);
                         }
                     }

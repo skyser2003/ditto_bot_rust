@@ -129,6 +129,7 @@ enum OpenAIResponsesTool {
     #[serde(rename = "web_search_preview")]
     WebSearch,
     CodeInterpreter(CodeInterpreterBody),
+    Mcp(McpBody),
 }
 
 #[derive(Debug, Serialize)]
@@ -169,6 +170,13 @@ enum CodeInterpreterContainerType {
     },
     #[allow(dead_code)]
     ContainerId(String),
+}
+
+#[derive(Debug, Serialize)]
+struct McpBody {
+    server_label: String,
+    server_url: String,
+    require_approval: String,
 }
 
 pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
@@ -237,6 +245,15 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     if !openai_model.starts_with("o") {
         tools.push(OpenAIResponsesTool::WebSearch);
+    }
+
+    // Remote mcp tools
+    if false {
+        tools.push(OpenAIResponsesTool::Mcp(McpBody {
+            server_label: "deepwiki".to_string(),
+            server_url: "https://mcp.deepwiki.com/sse".to_string(),
+            require_approval: "never".to_string(),
+        }));
     }
 
     let all_tools = bot.get_all_tools_metadata().await?;

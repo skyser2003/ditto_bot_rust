@@ -223,8 +223,6 @@ pub trait Bot {
         ts: &str,
     ) -> anyhow::Result<ConversationReplyResponse>;
 
-    fn redis(&self) -> anyhow::Result<redis::Connection>;
-
     async fn get_all_tools_metadata(
         &self,
     ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>>;
@@ -242,7 +240,6 @@ struct DittoBot {
     openai_key: String,
     gemini_key: String,
     http_client: reqwest::Client,
-    redis_client: Option<redis::Client>,
     mcp_clients: HashMap<String, McpClient>,
     mcp_tools: HashMap<String, (Cow<'static, str>, Peer<RoleClient>)>,
 }
@@ -253,7 +250,6 @@ impl DittoBot {
         bot_token: String,
         openai_key: String,
         gemini_key: String,
-        redis_client: Option<redis::Client>,
         mcp_clients: HashMap<String, McpClient>,
     ) -> Self {
         let mut mcp_tools = HashMap::new();
@@ -273,7 +269,6 @@ impl DittoBot {
             openai_key,
             gemini_key,
             http_client: reqwest::Client::new(),
-            redis_client,
             mcp_clients,
             mcp_tools,
         }
@@ -419,14 +414,6 @@ impl Bot for DittoBot {
                 body
             ))
         }
-    }
-
-    fn redis(&self) -> anyhow::Result<redis::Connection> {
-        self.redis_client
-            .as_ref()
-            .context("Redis client not initialized")?
-            .get_connection()
-            .context("Failed to get redis connection")
     }
 
     async fn get_all_tools_metadata(
@@ -748,10 +735,8 @@ async fn main() -> anyhow::Result<()> {
     info!("App token: {:?}", app_token);
 
     let bot_id = env::var("BOT_ID").context("Bot id is not given")?;
-    let redis_address = env::var("REDIS_ADDRESS").unwrap_or_default();
 
     info!("Slack bot id: {:?}", bot_id);
-    info!("Redis address: {:?}", redis_address);
 
     let openai_key = env::var("OPENAI_KEY").context("OpenAI key is not given")?;
     info!("OpenAI Key: {:?}", openai_key);
@@ -775,15 +760,6 @@ async fn main() -> anyhow::Result<()> {
         axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
     );
 
-    let redis_client = redis::Client::open(format!("redis://{}", redis_address));
-    let redis_client = match redis_client {
-        Ok(client) => Some(client),
-        Err(e) => {
-            error!("Failed to create redis client - {:?}", e);
-            None
-        }
-    };
-
     let mcp_clients = DittoBot::create_mcp_clients(tz).await;
 
     let bot = Arc::new(
@@ -792,7 +768,6 @@ async fn main() -> anyhow::Result<()> {
             bot_token.clone(),
             openai_key.clone(),
             gemini_key.clone(),
-            redis_client,
             mcp_clients,
         )
         .await,

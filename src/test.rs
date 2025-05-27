@@ -121,10 +121,6 @@ impl super::Bot for MockBot {
         Err(anyhow!("Not implemented!"))
     }
 
-    fn redis(&self) -> anyhow::Result<redis::Connection> {
-        todo!()
-    }
-
     async fn call_mcp_tool(
         &self,
         _unified_name: &str,

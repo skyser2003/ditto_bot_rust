@@ -252,17 +252,6 @@ pub struct SlackEventsApi {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct UsersList {
-    pub members: Vec<Member>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Member {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum ThreadMessageType {
     Unbroadcasted(ThreadUnbroadcastedMessage),

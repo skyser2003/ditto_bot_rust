@@ -25,19 +25,27 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then \
   fi;
 
 # install musl target
-RUN rustup target add $(cat TARGETARCH)-unknown-linux-musl
+RUN if [ "${BUILD_MODE}" = "cross" ]; then \
+  rustup target add $(cat TARGETARCH)-unknown-linux-musl; \
+  fi
+
 # install musl compiler
-RUN curl https://musl.cc/$(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz -o $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
+RUN if [ "${BUILD_MODE}" = "cross" ]; then \
+  curl https://musl.cc/$(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz -o $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
   tar -xzf $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
   rm $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE).tgz && \
-  mv $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE) /gcc-musl
+  mv $(cat TARGETARCH)-linux-musl-$(cat BUILD_MODE) /gcc-musl; \
+  fi
+
 ENV PATH=${PATH}:/gcc-musl/bin
 
-RUN mkdir .cargo && \
+RUN if [ "${BUILD_MODE}" = "cross" ]; then \
+  mkdir .cargo && \
   echo -e "[target.$(cat TARGETARCH)-unknown-linux-musl]\n\
   linker = \"$(cat TARGETARCH)-linux-musl-gcc\"\n\
   ar = \"$(cat TARGETARCH)-linux-musl-ar\"\n\
-  rustflags = [\"-Ctarget-feature=+crt-static\"]" > .cargo/config
+  rustflags = [\"-Ctarget-feature=+crt-static\"]" > .cargo/config; \
+  fi
 
 # begin build
 ADD Cargo.toml ./

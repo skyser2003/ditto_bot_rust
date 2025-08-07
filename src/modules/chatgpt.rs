@@ -228,7 +228,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     let stream_mode = stream_mode_str == "1" || stream_mode_str.to_lowercase() == "true";
 
     let openai_model = env::var("OPENAI_MODEL").unwrap_or("gpt-4o-mini".to_string());
-    let temperature = if openai_model.starts_with("o") {
+    let temperature = if openai_model.starts_with("o") || openai_model.starts_with("gpt-5") {
         1.0
     } else {
         gpt_split[1].parse::<f32>().unwrap_or(0.0)

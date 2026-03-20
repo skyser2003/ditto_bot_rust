@@ -199,11 +199,11 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     let gpt_split = call_type.split("gpt").collect::<Vec<_>>();
 
-    if gpt_split[0] != "" {
-        return Ok(());
-    }
-
-    let call_prefix = format!("{} {} ", slack_bot_format, call_type);
+    let call_prefix = if gpt_split[0] == "" {
+        format!("{} ", slack_bot_format)
+    } else {
+        format!("{} {} ", slack_bot_format, call_type)
+    };
 
     debug!("GPT: bot command full text = {:?}", &msg.text);
 

@@ -199,7 +199,9 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     let gpt_split = call_type.split("gpt").collect::<Vec<_>>();
 
-    let call_prefix = if gpt_split[0] == "" {
+    let gpt_prefix_exists = gpt_split[0] == "";
+
+    let call_prefix = if !gpt_prefix_exists {
         format!("{} ", slack_bot_format)
     } else {
         format!("{} {} ", slack_bot_format, call_type)
@@ -207,7 +209,14 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     debug!("GPT: bot command full text = {:?}", &msg.text);
 
-    let input_text = slices.iter().cloned().skip(1).collect::<Vec<_>>().join(" ");
+    let skip_count = if gpt_prefix_exists { 1 } else { 0 };
+
+    let input_text = slices
+        .iter()
+        .cloned()
+        .skip(skip_count)
+        .collect::<Vec<_>>()
+        .join(" ");
 
     let openai_req = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0")

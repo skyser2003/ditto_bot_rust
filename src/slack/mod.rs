@@ -171,12 +171,21 @@ pub struct MessageCommon {
 pub struct BasicMessage {
     #[serde(flatten)]
     pub common: MessageCommon,
+    pub subtype: Option<MessageSubtype>,
     pub channel: String,
     pub user: Option<String>,
     pub bot_id: Option<String>,
     pub edited: Option<Edited>,
     pub event_ts: String,
     pub blocks: Vec<Block>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MessageSubtype {
+    ThreadBroadcast,
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -179,7 +179,7 @@ struct McpBody {
     require_approval: String,
 }
 
-pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
+pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     let slack_bot_format = format!("<@{}>", bot.bot_id());
     let is_bot_command = msg.text.contains(&slack_bot_format);
 
@@ -199,7 +199,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     let gpt_split = call_type.split("gpt").collect::<Vec<_>>();
 
-    let gpt_prefix_exists = gpt_split[0] == "";
+    let gpt_prefix_exists = gpt_split[0].is_empty();
 
     let call_prefix = if !gpt_prefix_exists {
         format!("{} ", slack_bot_format)
@@ -371,7 +371,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         }
     };
 
-    if openai_body.input.len() == 0 {
+    if openai_body.input.is_empty() {
         error!("Error! no thread found");
 
         openai_body.input = vec![ResponsesInput::Text(OpenAIChatCompletionMessage {
@@ -382,7 +382,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     let reply_event = Some(ReplyMessageEvent {
         msg: thread_ts,
-        broadcast: true,
+        broadcast: msg.reply_broadcast,
     });
 
     let chat_url = "https://api.openai.com/v1/responses";
@@ -674,17 +674,17 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
 async fn get_function_call<B: Bot>(
     bot: &B,
-    name: &String,
-    call_id: &String,
-    arguments: &String,
+    name: &str,
+    call_id: &str,
+    arguments: &str,
 ) -> anyhow::Result<ResponsesInput> {
     let arguments: HashMap<String, serde_json::Value> =
-        serde_json::from_str(&arguments).unwrap_or_else(|_| HashMap::new());
+        serde_json::from_str(arguments).unwrap_or_else(|_| HashMap::new());
 
     let tool_result = bot.call_mcp_tool(name, arguments).await?;
 
     let tool_output = ResponsesToolOutput::FunctionCallOutput {
-        call_id: call_id.clone(),
+        call_id: call_id.to_string(),
         output: tool_result,
     };
 
@@ -709,7 +709,7 @@ impl<'a> GptMessageManager<'a> {
         }
     }
 
-    pub fn concat_message(&mut self, diff_message: &String) {
+    pub fn concat_message(&mut self, diff_message: &str) {
         self.message += diff_message;
     }
 
@@ -720,9 +720,8 @@ impl<'a> GptMessageManager<'a> {
     ) -> anyhow::Result<()> {
         let mut message = Cow::from(&self.message);
 
-        match temp_message {
-            Some(temp_message) => message += temp_message,
-            None => {}
+        if let Some(temp_message) = temp_message {
+            message += temp_message;
         }
 
         if !self.ts.is_empty() {
@@ -751,7 +750,7 @@ impl<'a> GptMessageManager<'a> {
         reply_event: &Option<ReplyMessageEvent>,
     ) -> anyhow::Result<PostMessageResponse> {
         let gpt_name_block = BlockElement::Section(SectionBlock::new_markdown("`ChatGPT`"));
-        let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(&message));
+        let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(message));
 
         let blocks = [gpt_name_block, gpt_answer_block];
 
@@ -780,7 +779,7 @@ impl<'a> GptMessageManager<'a> {
         ts: &str,
     ) -> anyhow::Result<()> {
         let gpt_name_block = BlockElement::Section(SectionBlock::new_markdown("`ChatGPT`"));
-        let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(&message));
+        let gpt_answer_block = BlockElement::Section(SectionBlock::new_markdown(message));
 
         let blocks = [gpt_name_block, gpt_answer_block];
 

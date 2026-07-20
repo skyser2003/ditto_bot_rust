@@ -43,6 +43,8 @@ mod modules;
 mod slack;
 #[cfg(test)]
 pub mod test;
+#[cfg(test)]
+mod tests;
 
 type McpClient = RunningService<RoleClient, ()>;
 
@@ -53,6 +55,7 @@ pub struct MessageEvent {
     text: String,
     ts: String,
     thread_ts: Option<String>,
+    reply_broadcast: bool,
     link: Option<String>,
 }
 
@@ -103,6 +106,7 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                 } else {
                     (String::from(&msg.common.ts), None)
                 };
+                let is_first_message = msg.common.thread_ts.is_none();
 
                 Ok(Self {
                     is_bot: msg.bot_id.is_some(),
@@ -118,6 +122,8 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     } else {
                         None
                     },
+                    reply_broadcast: is_first_message
+                        || msg.subtype == Some(slack::MessageSubtype::ThreadBroadcast),
                     link,
                 })
             }

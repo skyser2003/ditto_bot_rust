@@ -21,9 +21,13 @@ async fn test_ph() -> anyhow::Result<()> {
     handle(
         &bot,
         &MessageEvent {
+            is_bot: false,
             user: "".to_string(),
             channel: "".to_string(),
             text: "".to_string(),
+            ts: "".to_string(),
+            thread_ts: None,
+            reply_broadcast: false,
             link: None,
         },
     )
@@ -34,9 +38,13 @@ async fn test_ph() -> anyhow::Result<()> {
     handle(
         &bot,
         &MessageEvent {
+            is_bot: false,
             user: "".to_string(),
             channel: "".to_string(),
             text: "ㅍㅎ".to_string(),
+            ts: "".to_string(),
+            thread_ts: None,
+            reply_broadcast: false,
             link: None,
         },
     )

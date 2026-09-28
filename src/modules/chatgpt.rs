@@ -27,7 +27,8 @@ struct OpenAIChatCompletionMessage {
 struct OpenAIResponsesBody {
     model: String,
     input: Vec<ResponsesInput>,
-    temperature: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
     previous_response_id: Option<String>,
     store: bool,
     stream: bool,
@@ -238,9 +239,12 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
 
     let openai_model = env::var("OPENAI_MODEL").unwrap_or("gpt-4o-mini".to_string());
     let temperature = if openai_model.starts_with("o") || openai_model.starts_with("gpt-5") {
-        1.0
+        Some(1.0)
     } else {
-        gpt_split[1].parse::<f32>().unwrap_or(0.0)
+        match gpt_split[1].parse::<f32>() {
+            Ok(temperature) => Some(temperature),
+            _ => None,
+        }
     };
 
     let mut tools = vec![];

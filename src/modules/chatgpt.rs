@@ -208,7 +208,7 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
         format!("{} {} ", slack_bot_format, call_type)
     };
 
-    debug!("GPT: bot command full text = {:?}", &msg.text);
+    debug!("GPT: bot command full text = {:?}", msg.text);
 
     let skip_count = if gpt_prefix_exists { 1 } else { 0 };
 
@@ -241,10 +241,7 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
     let temperature = if openai_model.starts_with("o") || openai_model.starts_with("gpt-5") {
         Some(1.0)
     } else {
-        match gpt_split[1].parse::<f32>() {
-            Ok(temperature) => Some(temperature),
-            _ => None,
-        }
+        gpt_split[1].parse::<f32>().ok()
     };
 
     let mut tools = vec![];

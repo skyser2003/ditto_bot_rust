@@ -117,11 +117,11 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     channel: msg.channel.to_string(),
                     text: msg.common.text.to_string(),
                     ts,
-                    thread_ts: if let Some(thread_ts) = msg.common.thread_ts.clone() {
-                        Some(String::from(&thread_ts))
-                    } else {
-                        None
-                    },
+                    thread_ts: msg
+                        .common
+                        .thread_ts
+                        .clone()
+                        .map(|thread_ts| String::from(&thread_ts)),
                     reply_broadcast: is_first_message
                         || msg.subtype == Some(slack::MessageSubtype::ThreadBroadcast),
                     link,
@@ -347,7 +347,7 @@ impl Bot for DittoBot {
             .http_client
             .post("https://slack.com/api/chat.postMessage")
             .header("Content-type", "application/json; charset=utf-8")
-            .header("Authorization", format!("Bearer {}", &self.bot_token));
+            .header("Authorization", format!("Bearer {}", self.bot_token));
 
         let reply = message.as_postmessage(channel, reply, unfurl_links);
 
@@ -375,7 +375,7 @@ impl Bot for DittoBot {
             .http_client
             .post("https://slack.com/api/chat.update")
             .header("Content-type", "application/json; charset=utf-8")
-            .header("Authorization", format!("Bearer {}", &self.bot_token));
+            .header("Authorization", format!("Bearer {}", self.bot_token));
 
         let body = message.as_editmessage(channel, ts);
 
@@ -402,7 +402,7 @@ impl Bot for DittoBot {
             .http_client
             .get("https://slack.com/api/conversations.replies")
             .header("Content-type", "application/json; charset=utf-8")
-            .header("Authorization", format!("Bearer {}", &self.bot_token))
+            .header("Authorization", format!("Bearer {}", self.bot_token))
             .query(&[("channel", channel), ("ts", ts)]);
 
         let res = builder.send().await.context("Failed to send request")?;
@@ -411,15 +411,13 @@ impl Bot for DittoBot {
 
         let json_result = serde_json::from_str::<ConversationReplyResponse>(&body);
 
-        if json_result.is_ok() {
-            Ok(json_result.unwrap())
-        } else {
-            Err(anyhow!(
+        json_result.map_err(|error| {
+            anyhow!(
                 "Json parsing failed for conversations.replies: {:?} {}",
-                json_result.err(),
+                error,
                 body
-            ))
-        }
+            )
+        })
     }
 
     async fn get_all_tools_metadata(
@@ -545,7 +543,7 @@ impl IntoResponse for HttpResponse {
     }
 }
 
-async fn http_handler<'a>(
+async fn http_handler(
     Extension(bot): Extension<Arc<DittoBot>>,
     Json(event): Json<slack::SlackEvent>,
 ) -> HttpResponse {
@@ -719,8 +717,6 @@ async fn connect_slack_socket(
         .as_str()
         .ok_or_else(|| anyhow!("Invalid socket URL"))?;
 
-    info!("Socket connection url: {:?}", url);
-
     let (ws, _) = connect_async(url)
         .await
         .context("Failed to connect to slack websocket.")?;
@@ -735,23 +731,19 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let bot_token = env::var("SLACK_BOT_TOKEN").context("Bot token is not given")?;
-    info!("Bot token: {:?}", bot_token);
 
     let app_token = env::var("SLACK_APP_TOKEN").context("App token is not given")?;
-    info!("App token: {:?}", app_token);
 
     let bot_id = env::var("BOT_ID").context("Bot id is not given")?;
 
     info!("Slack bot id: {:?}", bot_id);
 
     let openai_key = env::var("OPENAI_KEY").context("OpenAI key is not given")?;
-    info!("OpenAI Key: {:?}", openai_key);
 
     let openai_model = env::var("OPENAI_MODEL").unwrap_or("gpt-4".to_string());
     info!("OpenAI model: {:?}", openai_model);
 
     let gemini_key = env::var("GEMINI_KEY").context("Gemini key is not given")?;
-    info!("Gemini Key: {:?}", gemini_key);
 
     let socket_mode = env::var("SOCKET_MODE").unwrap_or("0".to_string());
     info!("Socket mode: {:?}", socket_mode);
@@ -846,5 +838,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-// curl 'https://slack.com/api/chat.postMessage' -H 'Authorization: Bearer SECRET' -H 'Content-type: application/json; charset=utf-8' -d '{"channel": "CS2AVF83X", "text": "hello, world"}'

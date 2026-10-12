@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [release]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -14,7 +17,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      - name: Limit Cargo parallelism
+        run: echo "CARGO_BUILD_JOBS=$(( $(nproc) / 2 ))" >> "$GITHUB_ENV"
 
       - name: Check format
         run: cargo fmt -- --check
@@ -24,36 +30,33 @@ jobs:
           VERSION="2.1.0"
           OS="linux"
           case $(uname -m) in
-          armhf)
-            ARCH="arm"
-            ;;
-          x86_64)
-            ARCH="amd64"
-            ;;
-          i386)
-            ARCH="386"
-            ;;
+            armhf) ARCH="arm" ;;
+            x86_64) ARCH="amd64" ;;
+            i386) ARCH="386" ;;
           esac
-          curl -O -L -C - https://github.com/editorconfig-checker/editorconfig-checker/releases/download/$VERSION/ec-$OS-$ARCH.tar.gz
-          tar xzf ec-$OS-$ARCH.tar.gz
-          ./bin/ec-$OS-$ARCH
+          curl --fail --location --remote-name "https://github.com/editorconfig-checker/editorconfig-checker/releases/download/$VERSION/ec-$OS-$ARCH.tar.gz"
+          tar xzf "ec-$OS-$ARCH.tar.gz"
+          "./bin/ec-$OS-$ARCH"
 
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+        run: curl --fail --silent --show-error --location https://astral.sh/uv/install.sh | sh
 
       - name: Run tests
-        run: cargo test --verbose --all-features
+        run: cargo test --release --verbose --all-features
 
       - name: Check clippy
         run: cargo clippy --all-features
 
   deploy:
-    runs-on: ubuntu-latest
-    #needs: test_and_check
-    if: github.ref == 'refs/heads/release'
+    runs-on: ubuntu-24.04-arm
+    needs: test_and_check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    concurrency:
+      group: ditto-bot-deploy
+      cancel-in-progress: false
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Login to docker registry
         uses: docker/login-action@v3
@@ -62,12 +65,50 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Build
-        run: bash docker/build.sh
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Push
-        run: bash docker/push.sh
+      - name: Build and push ARM64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/arm64
+          push: true
+          pull: true
+          tags: ${{ secrets.REGISTRY_URL }}/shipduck/ditto_bot_rust:latest
 
-      - name: Publish
-        if: ${{ github.event_name == 'push' }}
-        run: curl -X POST ${{secrets.PORTAINER_WEBHOOK}}
+      - name: Deploy through Argo CD
+        env:
+          ARGOCD_URL: ${{ secrets.ARGOCD_URL }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${ARGOCD_URL:?Missing ARGOCD_URL secret}"
+          : "${ARGOCD_AUTH_TOKEN:?Missing ARGOCD_AUTH_TOKEN secret}"
+          application_url="${ARGOCD_URL%/}/api/v1/applications/ditto-bot"
+          resource_url="$application_url/resource?namespace=skyser&resourceName=ditto-bot&group=apps&version=v1&kind=Deployment&appNamespace=argocd"
+          previous_generation=$(curl --fail --silent --show-error --max-time 30 \
+            --header "Authorization: Bearer $ARGOCD_AUTH_TOKEN" "$resource_url" \
+            | jq -er '.manifest | fromjson | .metadata.generation')
+          curl --fail --silent --show-error --max-time 30 \
+            --request POST "$application_url/resource/actions/v2" \
+            --header "Authorization: Bearer $ARGOCD_AUTH_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data '{"namespace":"skyser","resourceName":"ditto-bot","group":"apps","version":"v1","kind":"Deployment","appNamespace":"argocd","action":"restart"}'
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --max-time 30 \
+              --header "Authorization: Bearer $ARGOCD_AUTH_TOKEN" "$resource_url" \
+              | jq --exit-status --argjson previous "$previous_generation" \
+                '.manifest | fromjson | .metadata.generation > $previous
+                 and .status.observedGeneration >= .metadata.generation
+                 and .status.updatedReplicas == .spec.replicas
+                 and .status.availableReplicas == .spec.replicas
+                 and .status.replicas == .spec.replicas' >/dev/null; then
+              echo 'Ditto bot deployment is ready.'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Ditto bot deployment did not become ready within five minutes.' >&2
+          exit 1

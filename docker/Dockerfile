@@ -52,7 +52,7 @@ ADD Cargo.toml ./
 ADD src/ ./src
 
 ENV PKG_CONFIG_ALL_STATIC=1
-RUN cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl --features check-req && \
+RUN jobs=$(( $(nproc) / 2 )) && CARGO_BUILD_JOBS=$(( jobs > 0 ? jobs : 1 )) cargo build --release --target $(cat TARGETARCH)-unknown-linux-musl --features check-req && \
   mv target/$(cat TARGETARCH)-unknown-linux-musl/release/ditto-bot-rust /ditto-bot-rust
 
 # XXX: using scratch create HOSTARCH image.

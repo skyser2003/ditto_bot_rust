@@ -71,12 +71,11 @@ struct ResChatSafetyRating {
 #[allow(dead_code)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-
 struct ResPromptFeedback {
     safety_ratings: Vec<ResChatSafetyRating>,
 }
 
-pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
+pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     let slack_bot_format = format!("<@{}>", bot.bot_id());
     let is_bot_command = msg.text.contains(&slack_bot_format);
 
@@ -96,7 +95,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     let gemini_split = call_type.split("gemini").collect::<Vec<_>>();
 
-    if gemini_split[0] != "" {
+    if !gemini_split[0].is_empty() {
         return Ok(());
     }
 
@@ -104,7 +103,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
     let call_prefix = format!("{} {} ", slack_bot_format, call_type);
 
-    debug!("Gemini: bot command full text = {:?}", &msg.text);
+    debug!("Gemini: bot command full text = {:?}", msg.text);
 
     let input_text = slices.iter().cloned().skip(1).collect::<Vec<_>>().join(" ");
 
@@ -124,11 +123,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
     let stream_mode_str = env::var("USE_GEMINI_STREAM").unwrap_or("true".to_string());
     let stream_mode_str = stream_mode_str.to_lowercase();
 
-    let stream_mode = if stream_mode_str == "true" || stream_mode_str == "1" {
-        true
-    } else {
-        false
-    };
+    let stream_mode = stream_mode_str == "true" || stream_mode_str == "1";
 
     let gemini_model = env::var("GEMINI_MODEL").unwrap_or("gemini-pro".to_string());
 
@@ -200,7 +195,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
         }
     };
 
-    if gemini_body.contents.len() == 0 {
+    if gemini_body.contents.is_empty() {
         error!("Error! no thread found");
 
         gemini_body.contents = vec![GeminiChatStreamMessage {
@@ -378,7 +373,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
         let res_body = res_body_result.unwrap();
 
-        let res_text = if res_body.candidates.len() == 0 {
+        let res_text = if res_body.candidates.is_empty() {
             "ditto_bot Error: "
         } else {
             &res_body.candidates[0].content.parts[0].text
@@ -386,7 +381,7 @@ pub async fn handle<'a, B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::R
 
         let res_text = res_text.trim_start();
 
-        GeminiMessageManager::send_message_static(bot, &res_text, &msg.channel, &reply_event)
+        GeminiMessageManager::send_message_static(bot, res_text, &msg.channel, &reply_event)
             .await
             .and(Ok(()))
     }
@@ -410,7 +405,7 @@ impl<'a> GeminiMessageManager<'a> {
         }
     }
 
-    pub fn concat_message(&mut self, diff_message: &String) {
+    pub fn concat_message(&mut self, diff_message: &str) {
         self.message += diff_message;
     }
 
@@ -421,9 +416,8 @@ impl<'a> GeminiMessageManager<'a> {
     ) -> anyhow::Result<()> {
         let mut message = Cow::from(&self.message);
 
-        match temp_message {
-            Some(temp_message) => message += temp_message,
-            None => {}
+        if let Some(temp_message) = temp_message {
+            message += temp_message
         }
 
         if !self.ts.is_empty() {
@@ -452,7 +446,7 @@ impl<'a> GeminiMessageManager<'a> {
         reply_event: &Option<ReplyMessageEvent>,
     ) -> anyhow::Result<PostMessageResponse> {
         let gemini_name_block = BlockElement::Section(SectionBlock::new_markdown("`Gemini`"));
-        let gemini_answer_block = BlockElement::Section(SectionBlock::new_markdown(&message));
+        let gemini_answer_block = BlockElement::Section(SectionBlock::new_markdown(message));
 
         let blocks = [gemini_name_block, gemini_answer_block];
 
@@ -481,7 +475,7 @@ impl<'a> GeminiMessageManager<'a> {
         ts: &str,
     ) -> anyhow::Result<()> {
         let gemini_name_block = BlockElement::Section(SectionBlock::new_markdown("`Gemini`"));
-        let gemini_answer_block = BlockElement::Section(SectionBlock::new_markdown(&message));
+        let gemini_answer_block = BlockElement::Section(SectionBlock::new_markdown(message));
 
         let blocks = [gemini_name_block, gemini_answer_block];
 

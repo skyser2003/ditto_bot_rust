@@ -240,8 +240,13 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
     let openai_model = env::var("OPENAI_MODEL").unwrap_or("gpt-4o-mini".to_string());
     let temperature = if openai_model.starts_with("o") || openai_model.starts_with("gpt-5") {
         Some(1.0)
+    } else if openai_model.starts_with("gpt-6") {
+        None
     } else {
-        gpt_split[1].parse::<f32>().ok()
+        match gpt_split[1].parse::<f32>() {
+            Ok(temp) => Some(temp),
+            Err(_) => None,
+        }
     };
 
     let mut tools = vec![];

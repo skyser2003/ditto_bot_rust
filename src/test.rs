@@ -11,12 +11,20 @@ use crate::{
 
 pub enum MockMessage {
     Blocks(Vec<super::slack::BlockElement>),
+    BlocksWithText {
+        text: String,
+        blocks: Vec<super::slack::BlockElement>,
+    },
     Text(String),
 }
 
 impl<'a> From<Message<'a>> for MockMessage {
     fn from(msg: Message<'a>) -> Self {
         match msg {
+            Message::BlocksWithText { text, blocks } => MockMessage::BlocksWithText {
+                text: text.to_string(),
+                blocks: blocks.to_vec(),
+            },
             Message::Blocks(blocks) => MockMessage::Blocks(blocks.iter().cloned().collect()),
             Message::Text(text) => MockMessage::Text(text.to_string()),
         }

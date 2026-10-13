@@ -150,6 +150,10 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
 
 pub enum Message<'a> {
     Blocks(&'a [slack::BlockElement]),
+    BlocksWithText {
+        text: &'a str,
+        blocks: &'a [slack::BlockElement],
+    },
     Text(&'a str),
 }
 
@@ -166,6 +170,14 @@ impl<'a> Message<'a> {
         };
 
         match self {
+            Message::BlocksWithText { text, blocks } => slack::PostMessage {
+                channel,
+                text: Some(text),
+                blocks: Some(blocks),
+                thread_ts,
+                reply_broadcast,
+                unfurl_links,
+            },
             Message::Blocks(blocks) => slack::PostMessage {
                 channel,
                 text: None,
@@ -187,6 +199,12 @@ impl<'a> Message<'a> {
 
     fn as_editmessage(&self, channel: &'a str, ts: &'a str) -> EditMessage<'a> {
         match self {
+            Message::BlocksWithText { text, blocks } => EditMessage {
+                channel,
+                text: Some(text),
+                blocks: Some(blocks),
+                ts: ts.to_string(),
+            },
             Message::Blocks(blocks) => EditMessage {
                 channel,
                 text: None,

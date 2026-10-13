@@ -28,6 +28,17 @@ contents to the OpenAI Responses API as base64 data URLs. This works with both
 streaming and non-streaming responses (`USE_GPT_STREAM`). If an image cannot be
 read or is too large, the bot replies with an error before calling OpenAI.
 
+## ChatGPT reply formatting
+
+ChatGPT replies are converted from Markdown to Slack's native rich text for both
+completed responses and streaming updates. Bold, italics, strikethrough, links,
+lists, quotes, and inline or fenced code retain their formatting. Bare URLs and
+email addresses remain clickable. Headings are
+shown in bold, and tables are displayed as preformatted text.
+
+The original Markdown is retained in the message's text fallback so follow-up
+requests keep the assistant's response in their conversation history.
+
 # Test
 
 ```bash

@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 
 mod files;
 pub use files::download_file;
+mod markdown;
+pub use markdown::markdown_to_rich_text;
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StrTimeStamp(String);
@@ -118,6 +120,39 @@ pub struct ImageBlock {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkBlock {
     pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<RichTextStyle>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct RichTextStyle {
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub bold: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub italic: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub strike: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub code: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
+}
+
+impl RichTextStyle {
+    fn as_option(self) -> Option<Self> {
+        (self.bold || self.italic || self.strike || self.code).then_some(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RichTextListStyle {
+    Bullet,
+    Ordered,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -125,7 +160,8 @@ pub struct LinkBlock {
 #[serde(rename_all = "snake_case")]
 pub enum BlockElement {
     RichText {
-        block_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        block_id: Option<String>,
         elements: Vec<BlockElement>,
     },
     RichTextSection {
@@ -134,8 +170,24 @@ pub enum BlockElement {
     RichTextFormatted {
         elements: Vec<BlockElement>,
     },
+    RichTextList {
+        style: RichTextListStyle,
+        #[serde(default)]
+        indent: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        offset: Option<u64>,
+        elements: Vec<BlockElement>,
+    },
+    RichTextQuote {
+        elements: Vec<BlockElement>,
+    },
+    RichTextPreformatted {
+        elements: Vec<BlockElement>,
+    },
     Text {
         text: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        style: Option<RichTextStyle>,
     },
     User {
         user_id: String,

@@ -295,3 +295,136 @@ async fn previous_request_keeps_leading_prompt_whitespace() {
     .await;
     assert_eq!(result[0]["content"], "\n    code");
 }
+
+fn rendered_blocks(message: &crate::test::MockMessage) -> Value {
+    match message {
+        crate::test::MockMessage::Blocks(blocks) => serde_json::to_value(blocks).unwrap(),
+        crate::test::MockMessage::BlocksWithText { blocks, .. } => {
+            serde_json::to_value(blocks).unwrap()
+        }
+        _ => panic!("Expected a block message"),
+    }
+}
+
+#[tokio::test]
+async fn completed_reply_uses_slack_rich_text() {
+    let bot = bot();
+    GptMessageManager::send_message_static(&bot, "**Bold** and `code`", "C123", &None)
+        .await
+        .unwrap();
+    let messages = bot.dump_messages().unwrap();
+    match &messages[0].1 {
+        crate::test::MockMessage::BlocksWithText { text, .. } => {
+            assert_eq!(text, "**Bold** and `code`")
+        }
+        _ => panic!("Expected original Markdown as the text fallback"),
+    }
+    let blocks = rendered_blocks(&messages[0].1);
+    assert_eq!(blocks[0]["text"]["text"], "`ChatGPT`");
+    assert_eq!(blocks[1]["type"], "rich_text");
+    assert_eq!(
+        blocks[1]["elements"][0]["elements"][0],
+        json!({
+            "type": "text", "text": "Bold", "style": {"bold": true}
+        })
+    );
+}
+
+#[tokio::test]
+async fn streaming_edit_uses_slack_rich_text() {
+    let bot = bot();
+    let channel = "C123".to_string();
+    let manager = GptMessageManager::new(&channel, None);
+    manager
+        .edit_message(
+            &bot,
+            "[Link](https://example.com)",
+            &channel,
+            "1673464745.620769",
+            None,
+        )
+        .await
+        .unwrap();
+    let messages = bot.dump_messages().unwrap();
+    match &messages[0].1 {
+        crate::test::MockMessage::BlocksWithText { text, .. } => {
+            assert_eq!(text, "[Link](https://example.com)")
+        }
+        _ => panic!("Expected original Markdown as the text fallback"),
+    }
+    let blocks = rendered_blocks(&messages[0].1);
+    assert_eq!(blocks[1]["type"], "rich_text");
+    assert_eq!(
+        blocks[1]["elements"][0]["elements"][0],
+        json!({
+            "type": "link", "url": "https://example.com", "text": "Link"
+        })
+    );
+}
+
+#[tokio::test]
+async fn rich_text_assistant_reply_preserves_markdown_in_history() {
+    let msg = event("<@BOT> gpt explain more", vec![]);
+    let result = input(
+        &bot(),
+        &msg,
+        vec![json!({
+            "type": "message", "subtype": "bot_message", "bot_id": "BOT",
+            "text": "**An image** of a cat", "ts": "1673464730.703009",
+            "blocks": [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "`ChatGPT`"}},
+                {"type": "rich_text", "elements": [{"type": "rich_text_section", "elements": [
+                    {"type": "text", "text": "An image", "style": {"bold": true}},
+                    {"type": "text", "text": " of a cat"}
+                ]}]}
+            ]
+        })],
+    )
+    .await;
+    assert_eq!(
+        result[0],
+        json!({"role": "assistant", "content": "**An image** of a cat"})
+    );
+}
+
+#[tokio::test]
+async fn streaming_status_does_not_break_a_closing_code_fence() {
+    for (source, expected_code) in [
+        ("```rust\nfn main() {}\n```", "fn main() {}\n"),
+        ("```rust\nfn main() {}", "fn main() {}"),
+    ] {
+        for footer in [" `[continue]`", "`[DONE]`"] {
+            let bot = bot();
+            let channel = "C123".to_string();
+            let mut manager = GptMessageManager::new(&channel, None);
+            manager.ts = "1673464745.620769".to_string();
+            manager.concat_message(source);
+            manager.stream_message(&bot, Some(footer)).await.unwrap();
+            assert_eq!(manager.message, source);
+            let messages = bot.dump_messages().unwrap();
+            let blocks = rendered_blocks(&messages[0].1);
+            assert_eq!(blocks[1]["elements"][0]["type"], "rich_text_preformatted");
+            assert_eq!(
+                blocks[1]["elements"][0]["elements"][0]["text"],
+                expected_code
+            );
+            assert_eq!(blocks[1]["elements"][1]["type"], "rich_text_section");
+        }
+    }
+}
+
+#[test]
+fn post_and_edit_payloads_keep_original_markdown_as_text() {
+    let source = "**Bold**\n\n```rust\nlet x = 1;\n```";
+    let blocks = GptMessageManager::response_blocks(source, None);
+    let message = Message::BlocksWithText {
+        text: source,
+        blocks: &blocks,
+    };
+    let post = serde_json::to_value(message.as_postmessage("C123", None, None)).unwrap();
+    let edit = serde_json::to_value(message.as_editmessage("C123", "1673464745.620769")).unwrap();
+    for payload in [post, edit] {
+        assert_eq!(payload["text"], source);
+        assert_eq!(payload["blocks"][1]["type"], "rich_text");
+    }
+}

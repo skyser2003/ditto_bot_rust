@@ -6,6 +6,28 @@
 SLACK_BOT_TOKEN=$() SLACK_SIGNING_SECRET=$() cargo run
 ```
 
+## ChatGPT image input
+
+Attach one or more images to a Slack message and mention the bot:
+
+```text
+@Ditto gpt Describe this image.
+```
+
+You can also send `@Ditto gpt` or just `@Ditto` with an image attached. Images
+from earlier messages in the same thread are included in follow-up requests.
+Supported formats are PNG, JPEG, WebP, and non-animated GIF, up to 20 MiB per
+image. Other file attachments are ignored.
+
+The Slack bot token needs the `files:read` OAuth scope. Add the scope and
+reinstall the Slack app in your workspace if necessary. Set `OPENAI_MODEL` to a
+model that supports image input; the default is `gpt-4o-mini`.
+
+The bot downloads private Slack images using its Slack token and sends their
+contents to the OpenAI Responses API as base64 data URLs. This works with both
+streaming and non-streaming responses (`USE_GPT_STREAM`). If an image cannot be
+read or is too large, the bot replies with an error before calling OpenAI.
+
 # Test
 
 ```bash

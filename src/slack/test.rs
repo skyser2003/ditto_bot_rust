@@ -92,3 +92,28 @@ pub fn test_deserialize_normal_message() {
     )
     .unwrap();
 }
+
+#[test]
+fn image_only_thread_message_is_preserved() {
+    let message = serde_json::from_value::<ThreadMessageType>(serde_json::json!({
+        "type": "message",
+        "subtype": "file_share",
+        "user": "U123",
+        "text": "",
+        "ts": "1673464745.620769",
+        "files": [{
+            "id": "F123",
+            "mimetype": "image/png",
+            "url_private": "https://files.slack.com/files-pri/T123-F123/image.png"
+        }]
+    }))
+    .unwrap();
+
+    if let ThreadMessageType::Unbroadcasted(message) = message {
+        assert!(message.text.is_empty());
+        assert_eq!(message.files.len(), 1);
+        assert_eq!(message.files[0].id, "F123");
+    } else {
+        panic!("image-only thread message must preserve its files");
+    }
+}

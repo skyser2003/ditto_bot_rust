@@ -5,6 +5,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
+mod files;
+pub use files::download_file;
+
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StrTimeStamp(String);
 
@@ -168,6 +171,22 @@ pub struct MessageCommon {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct SlackFile {
+    pub id: String,
+    #[serde(default)]
+    pub mimetype: String,
+    pub size: Option<u64>,
+    pub url_private: Option<String>,
+    pub url_private_download: Option<String>,
+}
+
+impl SlackFile {
+    pub fn is_image(&self) -> bool {
+        self.mimetype.starts_with("image/")
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct BasicMessage {
     #[serde(flatten)]
     pub common: MessageCommon,
@@ -177,7 +196,10 @@ pub struct BasicMessage {
     pub bot_id: Option<String>,
     pub edited: Option<Edited>,
     pub event_ts: String,
+    #[serde(default)]
     pub blocks: Vec<Block>,
+    #[serde(default)]
+    pub files: Vec<SlackFile>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -281,12 +303,16 @@ pub struct ConversationReplyResponse {
 pub struct ThreadUnbroadcastedMessage {
     #[serde(rename = "type")]
     pub ty: String,
-    pub client_msg_id: String,
+    pub client_msg_id: Option<String>,
     pub text: String,
     pub user: String,
+    pub bot_id: Option<String>,
     pub ts: StrTimeStamp,
+    #[serde(default)]
     pub blocks: Vec<BlockElement>,
-    pub team: String,
+    #[serde(default)]
+    pub files: Vec<SlackFile>,
+    pub team: Option<String>,
     pub thread_ts: Option<StrTimeStamp>,
     pub parent_user_id: Option<String>,
     pub reply_count: Option<i32>,
@@ -309,11 +335,14 @@ pub struct ThreadBroadcastedMessage {
     pub bot_id: Option<String>,
     pub user: Option<String>,
     pub ts: StrTimeStamp,
-    pub thread_ts: StrTimeStamp,
-    pub root: ThreadUnbroadcastedMessage,
+    pub thread_ts: Option<StrTimeStamp>,
+    pub root: Option<ThreadUnbroadcastedMessage>,
     pub username: Option<String>,
     pub app_id: Option<String>,
+    #[serde(default)]
     pub blocks: Vec<BlockElement>,
+    #[serde(default)]
+    pub files: Vec<SlackFile>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

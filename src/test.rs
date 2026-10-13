@@ -26,6 +26,7 @@ impl<'a> From<Message<'a>> for MockMessage {
 #[derive(Default)]
 pub struct MockBot {
     messages: RwLock<Vec<(String, MockMessage)>>,
+    pub files: RwLock<HashMap<String, bytes::Bytes>>,
 }
 
 impl MockBot {
@@ -121,6 +122,15 @@ impl super::Bot for MockBot {
         Err(anyhow!("Not implemented!"))
     }
 
+    async fn download_file(&self, file: &crate::slack::SlackFile) -> anyhow::Result<bytes::Bytes> {
+        self.files
+            .read()
+            .map_err(|e| anyhow!("read lock failed - {}", e))?
+            .get(&file.id)
+            .cloned()
+            .ok_or_else(|| anyhow!("File {} is unavailable", file.id))
+    }
+
     async fn call_mcp_tool(
         &self,
         _unified_name: &str,
@@ -132,7 +142,7 @@ impl super::Bot for MockBot {
     async fn get_all_tools_metadata(
         &self,
     ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>> {
-        Err(anyhow!("Not implemented!"))
+        Ok(vec![])
     }
 }
 

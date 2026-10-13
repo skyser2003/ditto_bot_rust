@@ -57,6 +57,7 @@ pub struct MessageEvent {
     thread_ts: Option<String>,
     reply_broadcast: bool,
     link: Option<String>,
+    files: Vec<slack::SlackFile>,
 }
 
 #[derive(Clone)]
@@ -125,6 +126,7 @@ impl TryFrom<&slack::InternalEvent> for MessageEvent {
                     reply_broadcast: is_first_message
                         || msg.subtype == Some(slack::MessageSubtype::ThreadBroadcast),
                     link,
+                    files: msg.files.clone(),
                 })
             }
             slack::InternalEvent::Message(slack::Message::TaggedMessage(_)) => {
@@ -228,6 +230,8 @@ pub trait Bot {
         channel: &str,
         ts: &str,
     ) -> anyhow::Result<ConversationReplyResponse>;
+
+    async fn download_file(&self, file: &slack::SlackFile) -> anyhow::Result<Bytes>;
 
     async fn get_all_tools_metadata(
         &self,
@@ -418,6 +422,10 @@ impl Bot for DittoBot {
                 body
             )
         })
+    }
+
+    async fn download_file(&self, file: &slack::SlackFile) -> anyhow::Result<Bytes> {
+        slack::download_file(&self.http_client, &self.bot_token, file).await
     }
 
     async fn get_all_tools_metadata(

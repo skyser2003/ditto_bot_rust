@@ -1,26 +1,51 @@
 use std::{borrow::Cow, collections::HashMap, env};
 
+use anyhow::{bail, Context};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use futures::StreamExt;
 use log::{debug, error};
 use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    slack::{BlockElement, PostMessageResponse, SectionBlock, ThreadMessageType},
+    slack::{BlockElement, PostMessageResponse, SectionBlock, SlackFile, ThreadMessageType},
     Bot, Message, ReplyMessageEvent,
 };
+
+#[cfg(test)]
+mod test;
+
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
 enum ResponsesInput {
-    Text(OpenAIChatCompletionMessage),
+    Message(OpenAIResponsesMessage),
     FunctionCall(ResponsesToolOutput),
 }
 
 #[derive(Debug, Serialize)]
-struct OpenAIChatCompletionMessage {
+struct OpenAIResponsesMessage {
     role: String,
-    content: String,
+    content: ResponsesMessageContent,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum ResponsesMessageContent {
+    Text(String),
+    Parts(Vec<ResponsesContentPart>),
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ResponsesContentPart {
+    InputText {
+        text: String,
+    },
+    InputImage {
+        image_url: String,
+        detail: &'static str,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -192,15 +217,15 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
 
     let slices = command_str.split_whitespace().collect::<Vec<&str>>();
 
-    if slices.is_empty() {
+    if slices.is_empty() && !msg.files.iter().any(SlackFile::is_image) {
         return Ok(());
     }
 
-    let call_type = slices[0];
+    let call_type = slices.first().copied().unwrap_or("");
 
     let gpt_split = call_type.split("gpt").collect::<Vec<_>>();
 
-    let gpt_prefix_exists = gpt_split[0].is_empty();
+    let gpt_prefix_exists = call_type.starts_with("gpt");
 
     let call_prefix = if !gpt_prefix_exists {
         format!("{} ", slack_bot_format)
@@ -210,14 +235,7 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
 
     debug!("GPT: bot command full text = {:?}", msg.text);
 
-    let skip_count = if gpt_prefix_exists { 1 } else { 0 };
-
-    let input_text = slices
-        .iter()
-        .cloned()
-        .skip(skip_count)
-        .collect::<Vec<_>>()
-        .join(" ");
+    let input_text = parse_input_text(&command_str, gpt_prefix_exists);
 
     let openai_req = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0")
@@ -243,10 +261,7 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
     } else if openai_model.starts_with("gpt-6") {
         None
     } else {
-        match gpt_split[1].parse::<f32>() {
-            Ok(temp) => Some(temp),
-            Err(_) => None,
-        }
+        gpt_split.get(1).and_then(|value| value.parse::<f32>().ok())
     };
 
     let mut tools = vec![];
@@ -318,78 +333,27 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
         tools,
     };
 
-    if let Ok(conv_res) = conv_result {
-        if let Some(messages) = conv_res.messages {
-            messages.iter().for_each(|msg| {
-                let (role, mut content) = match msg {
-                    ThreadMessageType::Unbroadcasted(val) => ("user", val.text.clone()),
-                    ThreadMessageType::Broadcasted(val) => {
-                        if val.user.is_some() {
-                            ("user", val.text.clone())
-                        } else {
-                            let speaker = "assistant";
-
-                            if val.blocks.len() < 2 {
-                                return;
-                            }
-
-                            let mut text = val.text.clone();
-
-                            let mut is_valid_response = false;
-
-                            if let BlockElement::Section(section) = &val.blocks[0] {
-                                if section.text.text == "`ChatGPT`" {
-                                    if let BlockElement::Section(real_text_section) = &val.blocks[1]
-                                    {
-                                        text = real_text_section.text.text.clone();
-                                        is_valid_response = true;
-                                    }
-                                }
-                            }
-
-                            if !is_valid_response {
-                                return;
-                            }
-
-                            (speaker, text)
-                        }
-                    }
-                    ThreadMessageType::None(_) => return,
-                };
-
-                if role == "user" {
-                    let call_split = content.split(&call_prefix).collect::<Vec<_>>();
-
-                    if call_split.len() == 2 {
-                        content = call_split[1].to_string();
-                    }
-                }
-
-                let role = role.to_string();
-
-                openai_body
-                    .input
-                    .push(ResponsesInput::Text(OpenAIChatCompletionMessage {
-                        role,
-                        content,
-                    }));
-            });
-        }
-    };
-
-    if openai_body.input.is_empty() {
-        error!("Error! no thread found");
-
-        openai_body.input = vec![ResponsesInput::Text(OpenAIChatCompletionMessage {
-            role: "user".to_string(),
-            content: input_text,
-        })];
-    }
-
+    let messages = conv_result
+        .as_ref()
+        .ok()
+        .filter(|response| response.ok)
+        .and_then(|response| response.messages.as_deref())
+        .unwrap_or_default();
     let reply_event = Some(ReplyMessageEvent {
         msg: thread_ts,
         broadcast: msg.reply_broadcast,
     });
+
+    openai_body.input =
+        match build_responses_input(bot, msg, &input_text, &call_prefix, messages).await {
+            Ok(input) => input,
+            Err(error) => {
+                let text = format!("Unable to read an attached image: {:#}", error);
+                bot.send_message(&msg.channel, Message::Text(&text), reply_event, None)
+                    .await?;
+                return Ok(());
+            }
+        };
 
     let chat_url = "https://api.openai.com/v1/responses";
 
@@ -531,7 +495,6 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
                         }
                         reqwest_eventsource::Error::InvalidStatusCode(code, err_res) => {
                             error!("OpenAI SSE error code: {}", code);
-                            error!("OpenAI SSE body: {:?}", serde_json::to_string(&openai_body));
 
                             match err_res.text().await {
                                 Ok(body) => error!("OpenAI SSE error res body: {}", body),
@@ -539,7 +502,6 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
                             }
                         }
                         _ => {
-                            error!("OpenAI SSE body: {:?}", serde_json::to_string(&openai_body));
                             error!("OpenAI SSE error: {:?}", e);
                         }
                     }
@@ -676,6 +638,128 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
             }
         }
     }
+}
+
+fn parse_input_text(command_str: &str, gpt_prefix_exists: bool) -> String {
+    let text = if gpt_prefix_exists {
+        let command_str = command_str.trim_start();
+        let command_end = command_str
+            .find(char::is_whitespace)
+            .unwrap_or(command_str.len());
+        &command_str[command_end..]
+    } else {
+        command_str
+    };
+    text.strip_prefix(' ').unwrap_or(text).to_string()
+}
+
+async fn build_responses_input<B: Bot>(
+    bot: &B,
+    msg: &crate::MessageEvent,
+    input_text: &str,
+    call_prefix: &str,
+    messages: &[ThreadMessageType],
+) -> anyhow::Result<Vec<ResponsesInput>> {
+    let mut input = vec![];
+    let mut current_files = msg.files.as_slice();
+
+    for message in messages {
+        let (is_bot, text, files, ts, blocks) = match message {
+            ThreadMessageType::Unbroadcasted(message) => (
+                message.bot_id.is_some(),
+                &message.text,
+                message.files.as_slice(),
+                &message.ts,
+                message.blocks.as_slice(),
+            ),
+            ThreadMessageType::Broadcasted(message) => (
+                message.bot_id.is_some() || message.user.is_none(),
+                &message.text,
+                message.files.as_slice(),
+                &message.ts,
+                message.blocks.as_slice(),
+            ),
+            ThreadMessageType::None(_) => continue,
+        };
+        let (role, mut text, files) = if is_bot {
+            let text = match blocks {
+                [BlockElement::Section(label), BlockElement::Section(content), ..]
+                    if label.text.text == "`ChatGPT`" =>
+                {
+                    content.text.text.clone()
+                }
+                _ => continue,
+            };
+            ("assistant", text, &[][..])
+        } else {
+            ("user", text.clone(), files)
+        };
+
+        // The event is authoritative for the current request, including attachments
+        // that may not have appeared in conversations.replies yet.
+        if String::from(ts) == msg.ts {
+            if current_files.is_empty() {
+                current_files = files;
+            }
+            continue;
+        }
+
+        if role == "user" {
+            if let Some(content) = text.strip_prefix(call_prefix.trim_end()) {
+                if content.is_empty() || content.starts_with(char::is_whitespace) {
+                    text = content.strip_prefix(' ').unwrap_or(content).to_string();
+                }
+            }
+        }
+        if text.is_empty() && !files.iter().any(SlackFile::is_image) {
+            continue;
+        }
+        input.push(build_response_message(bot, role, text, files).await?);
+    }
+
+    input.push(build_response_message(bot, "user", input_text.to_string(), current_files).await?);
+    Ok(input)
+}
+
+async fn build_response_message<B: Bot>(
+    bot: &B,
+    role: &str,
+    text: String,
+    files: &[SlackFile],
+) -> anyhow::Result<ResponsesInput> {
+    let content = if role == "user" && files.iter().any(SlackFile::is_image) {
+        let mut parts = vec![];
+        if !text.is_empty() {
+            parts.push(ResponsesContentPart::InputText { text });
+        }
+        for file in files.iter().filter(|file| file.is_image()) {
+            if !matches!(
+                file.mimetype.as_str(),
+                "image/png" | "image/jpeg" | "image/webp" | "image/gif"
+            ) {
+                bail!(
+                    "Image {} has an unsupported format; use PNG, JPEG, WebP, or GIF",
+                    file.id
+                );
+            }
+            let bytes = bot
+                .download_file(file)
+                .await
+                .with_context(|| format!("Failed to read image {}", file.id))?;
+            let image_url = format!("data:{};base64,{}", file.mimetype, STANDARD.encode(bytes));
+            parts.push(ResponsesContentPart::InputImage {
+                image_url,
+                detail: "auto",
+            });
+        }
+        ResponsesMessageContent::Parts(parts)
+    } else {
+        ResponsesMessageContent::Text(text)
+    };
+    Ok(ResponsesInput::Message(OpenAIResponsesMessage {
+        role: role.to_string(),
+        content,
+    }))
 }
 
 async fn get_function_call<B: Bot>(

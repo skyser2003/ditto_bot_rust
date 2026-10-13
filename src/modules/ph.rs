@@ -29,6 +29,7 @@ async fn test_ph() -> anyhow::Result<()> {
             thread_ts: None,
             reply_broadcast: false,
             link: None,
+            files: vec![],
         },
     )
     .await?;
@@ -46,6 +47,7 @@ async fn test_ph() -> anyhow::Result<()> {
             thread_ts: None,
             reply_broadcast: false,
             link: None,
+            files: vec![],
         },
     )
     .await?;

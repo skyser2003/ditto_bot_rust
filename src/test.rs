@@ -35,6 +35,7 @@ impl<'a> From<Message<'a>> for MockMessage {
 pub struct MockBot {
     messages: RwLock<Vec<(String, MockMessage)>>,
     pub files: RwLock<HashMap<String, bytes::Bytes>>,
+    pub forbid_tool_metadata: bool,
 }
 
 impl MockBot {
@@ -150,6 +151,9 @@ impl super::Bot for MockBot {
     async fn get_all_tools_metadata(
         &self,
     ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>> {
+        if self.forbid_tool_metadata {
+            return Err(anyhow!("Chat tool metadata must not be requested"));
+        }
         Ok(vec![])
     }
 }

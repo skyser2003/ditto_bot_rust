@@ -12,7 +12,7 @@ fn file(id: &str, mimetype: &str, url: &str) -> Value {
     json!({ "id": id, "mimetype": mimetype, "size": 5, "url_private": url })
 }
 
-fn event(text: &str, files: Vec<Value>) -> MessageEvent {
+pub(super) fn event(text: &str, files: Vec<Value>) -> MessageEvent {
     let event = serde_json::from_value::<slack::InternalEvent>(json!({
         "type": "message", "user": "U123", "channel": "C123", "text": text,
         "ts": "1673464745.620769", "event_ts": "1673464745.620769", "files": files
@@ -427,4 +427,20 @@ fn post_and_edit_payloads_keep_original_markdown_as_text() {
         assert_eq!(payload["text"], source);
         assert_eq!(payload["blocks"][1]["type"], "rich_text");
     }
+}
+
+#[tokio::test]
+async fn empty_mod_command_returns_usage_before_chat_setup() {
+    let mut bot = bot();
+    bot.forbid_tool_metadata = true;
+    let msg = event("<@> mod", vec![]);
+    handle(&bot, &msg).await.unwrap();
+    let messages = bot.dump_messages().unwrap();
+    assert_eq!(messages.len(), 1);
+    let blocks = rendered_blocks(&messages[0].1);
+    assert_eq!(blocks[0]["text"]["text"], "`Moderation`");
+    assert_eq!(
+        blocks[1]["text"]["text"],
+        "Usage: mention the bot followed by mod <text>."
+    );
 }

@@ -39,6 +39,25 @@ shown in bold, and tables are displayed as preformatted text.
 The original Markdown is retained in the message's text fallback so follow-up
 requests keep the assistant's response in their conversation history.
 
+## Moderation
+
+Mention the bot followed by `mod` and the text to classify:
+
+```text
+@Ditto bot mod <some_input_text>
+```
+
+`@Ditto bot` is the bot mention; the command after it is `mod <text>`.
+
+The command sends only the text after `mod` to OpenAI's `/v1/moderations`
+endpoint using `omni-moderation-latest` and the existing OpenAI API key. The reply
+lists the category names whose `categories` values are `true`, sorted
+alphabetically. If all categories are `false`, it replies `No flagged
+categories.` Empty input displays usage; API failures display an error.
+
+This command classifies text directly, without generating a ChatGPT response or
+including earlier thread messages or image attachments.
+
 # Test
 
 ```bash

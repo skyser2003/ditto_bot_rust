@@ -12,6 +12,8 @@ use crate::{
     Bot, Message, ReplyMessageEvent,
 };
 
+mod moderation;
+
 #[cfg(test)]
 mod test;
 
@@ -211,6 +213,10 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
 
     if !is_bot_command {
         return Ok(());
+    }
+
+    if let Some(input) = moderation::parse_command(&msg.text, &slack_bot_format) {
+        return moderation::handle(bot, msg, input).await;
     }
 
     let command_str = msg.text.replace(&slack_bot_format, "");

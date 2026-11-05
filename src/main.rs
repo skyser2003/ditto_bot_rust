@@ -243,6 +243,10 @@ pub trait Bot {
         ts: &str,
     ) -> anyhow::Result<EditMessageResponse>;
 
+    async fn add_reaction(&self, channel: &str, ts: &str, name: &str) -> anyhow::Result<()>;
+
+    async fn remove_reaction(&self, channel: &str, ts: &str, name: &str) -> anyhow::Result<()>;
+
     async fn get_conversation_replies(
         &self,
         channel: &str,
@@ -413,6 +417,14 @@ impl Bot for DittoBot {
             .context("Failed to parse response")?;
 
         Ok(resp)
+    }
+
+    async fn add_reaction(&self, channel: &str, ts: &str, name: &str) -> anyhow::Result<()> {
+        slack::add_reaction(&self.http_client, &self.bot_token, channel, ts, name).await
+    }
+
+    async fn remove_reaction(&self, channel: &str, ts: &str, name: &str) -> anyhow::Result<()> {
+        slack::remove_reaction(&self.http_client, &self.bot_token, channel, ts, name).await
     }
 
     async fn get_conversation_replies(

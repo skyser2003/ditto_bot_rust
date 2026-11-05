@@ -9,6 +9,8 @@ mod files;
 pub use files::download_file;
 mod markdown;
 pub use markdown::markdown_to_rich_text;
+mod reactions;
+pub use reactions::{add_reaction, remove_reaction};
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StrTimeStamp(String);

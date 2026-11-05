@@ -1,9 +1,9 @@
-use std::{borrow::Cow, collections::HashMap, env};
+use std::{borrow::Cow, collections::HashMap, env, future::Future, panic::AssertUnwindSafe};
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use base64::{engine::general_purpose::STANDARD, Engine};
-use futures::StreamExt;
-use log::{debug, error};
+use futures::{FutureExt, StreamExt};
+use log::{debug, error, warn};
 use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +13,9 @@ use crate::{
 };
 
 mod moderation;
+
+const PROCESSING_REACTION: &str = "hourglass_flowing_sand";
+const ERROR_MESSAGE: &str = "An error occurred while processing your request. Please try again.";
 
 #[cfg(test)]
 mod test;
@@ -73,6 +76,12 @@ pub enum ResponsesStreamingResponse {
     Completed {
         response: ResponsesCompletedResponse,
     },
+    #[serde(rename = "response.failed")]
+    Failed,
+    #[serde(rename = "response.incomplete")]
+    Incomplete,
+    #[serde(rename = "error")]
+    Error,
     #[serde(rename = "response.created")]
     Created,
     #[serde(rename = "response.in_progress")]
@@ -100,6 +109,7 @@ pub enum ResponsesStreamingResponse {
 pub struct ResponsesCompletedResponse {
     #[allow(dead_code)]
     id: String,
+    status: String,
     // If empty, skip
     #[serde(default)]
     output: Vec<ResponsesStreamingOutput>,
@@ -221,13 +231,67 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
 
     let command_str = msg.text.replace(&slack_bot_format, "");
 
-    let slices = command_str.split_whitespace().collect::<Vec<&str>>();
-
-    if slices.is_empty() && !msg.files.iter().any(SlackFile::is_image) {
+    if command_str.trim().is_empty() && !msg.files.iter().any(SlackFile::is_image) {
         return Ok(());
     }
 
-    let call_type = slices.first().copied().unwrap_or("");
+    process_request(bot, msg, respond(bot, msg, &slack_bot_format, &command_str)).await
+}
+
+async fn process_request<B: Bot>(
+    bot: &B,
+    msg: &crate::MessageEvent,
+    response: impl Future<Output = anyhow::Result<()>>,
+) -> anyhow::Result<()> {
+    if let Err(error) = bot
+        .add_reaction(&msg.channel, &msg.ts, PROCESSING_REACTION)
+        .await
+    {
+        warn!("Failed to add ChatGPT processing reaction: {:#}", error);
+    }
+
+    let result = AssertUnwindSafe(response)
+        .catch_unwind()
+        .await
+        .unwrap_or_else(|_| Err(anyhow!("ChatGPT request panicked")));
+
+    if let Err(error) = &result {
+        error!("ChatGPT request failed: {:#}", error);
+        let reply = Some(ReplyMessageEvent {
+            msg: msg.thread_ts.clone().unwrap_or_else(|| msg.ts.clone()),
+            broadcast: msg.reply_broadcast,
+        });
+        match bot
+            .send_message(&msg.channel, Message::Text(ERROR_MESSAGE), reply, None)
+            .await
+        {
+            Ok(sent) if sent.ok => {}
+            Ok(sent) => error!(
+                "Slack rejected ChatGPT error notification: {:?}",
+                sent.error
+            ),
+            Err(error) => error!("Failed to send ChatGPT error notification: {:#}", error),
+        }
+    }
+
+    // Final cleanup runs after both the response and any error notification.
+    if let Err(error) = bot
+        .remove_reaction(&msg.channel, &msg.ts, PROCESSING_REACTION)
+        .await
+    {
+        warn!("Failed to remove ChatGPT processing reaction: {:#}", error);
+    }
+
+    result
+}
+
+async fn respond<B: Bot>(
+    bot: &B,
+    msg: &crate::MessageEvent,
+    slack_bot_format: &str,
+    command_str: &str,
+) -> anyhow::Result<()> {
+    let call_type = command_str.split_whitespace().next().unwrap_or("");
 
     let gpt_split = call_type.split("gpt").collect::<Vec<_>>();
 
@@ -241,7 +305,7 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
 
     debug!("GPT: bot command full text = {:?}", msg.text);
 
-    let input_text = parse_input_text(&command_str, gpt_prefix_exists);
+    let input_text = parse_input_text(command_str, gpt_prefix_exists);
 
     let openai_req = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0")
@@ -351,130 +415,78 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
     });
 
     openai_body.input =
-        match build_responses_input(bot, msg, &input_text, &call_prefix, messages).await {
-            Ok(input) => input,
-            Err(error) => {
-                let text = format!("Unable to read an attached image: {:#}", error);
-                bot.send_message(&msg.channel, Message::Text(&text), reply_event, None)
-                    .await?;
-                return Ok(());
-            }
-        };
+        build_responses_input(bot, msg, &input_text, &call_prefix, messages).await?;
 
-    let chat_url = "https://api.openai.com/v1/responses";
+    deliver_response(
+        bot,
+        msg,
+        &openai_req,
+        openai_body,
+        "https://api.openai.com/v1/responses",
+        reply_event,
+    )
+    .await
+}
 
-    let openai_builder = openai_req
-        .post(chat_url)
-        .bearer_auth(bot.openai_key())
-        .json(&openai_body);
+async fn deliver_response<B: Bot>(
+    bot: &B,
+    msg: &crate::MessageEvent,
+    client: &reqwest::Client,
+    mut body: OpenAIResponsesBody,
+    url: &str,
+    reply_event: Option<ReplyMessageEvent>,
+) -> anyhow::Result<()> {
+    let request = client.post(url).bearer_auth(bot.openai_key()).json(&body);
 
-    if stream_mode {
-        let mut gpt_message = GptMessageManager::new(&msg.channel, reply_event.clone());
+    if body.stream {
+        let mut gpt_message = GptMessageManager::new(&msg.channel, reply_event);
         let mut initial_received = false;
+        let mut events = EventSource::new(request)?;
 
-        let mut openai_sse = EventSource::new(openai_builder)?;
-
-        while let Some(event) = openai_sse.next().await {
-            match event {
-                Ok(Event::Open) => {
-                    debug!("OpenAI SSE opened");
-                }
-                Ok(Event::Message(event)) => {
-                    let data = event.data.clone();
-
-                    let sse_res = serde_json::from_str::<ResponsesStreamingResponse>(&data);
-
-                    if sse_res.is_err() {
-                        error!("OpenAI SSE json parsing failed: {:?}", data);
-                        continue;
-                    }
-
-                    let sse_res = sse_res.unwrap();
-
-                    match sse_res {
-                        ResponsesStreamingResponse::Delta { item_id: _, delta } => {
-                            debug!("OpenAI SSE delta: {:?}", delta);
-
+        while let Some(event) = events.next().await {
+            match event.context("OpenAI response stream failed")? {
+                Event::Open => debug!("OpenAI SSE opened"),
+                Event::Message(event) => {
+                    let event: ResponsesStreamingResponse = serde_json::from_str(&event.data)
+                        .context("OpenAI returned an invalid stream event")?;
+                    match event {
+                        ResponsesStreamingResponse::Delta { delta, .. } => {
                             if !initial_received {
                                 initial_received = true;
-
-                                match gpt_message
+                                gpt_message
                                     .stream_message(bot, Some("`Receiving...`"))
-                                    .await
-                                {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        error!("OpenAI SSE stream message sending failed: {:?}", e);
-                                    }
-                                }
+                                    .await?;
                             }
-
                             gpt_message.concat_message(&delta);
-
-                            if ![",", ".", "?", "!", "\n"].contains(&delta.as_str()) {
-                                continue;
-                            }
-
-                            let sent = gpt_message.stream_message(bot, Some(" `[continue]`")).await;
-
-                            if sent.is_err() {
-                                error!("OpenAI SSE stream message sending failed: {:?}", sent);
-
-                                return Ok(());
+                            if [",", ".", "?", "!", "\n"].contains(&delta.as_str()) {
+                                gpt_message
+                                    .stream_message(bot, Some(" `[continue]`"))
+                                    .await?;
                             }
                         }
                         ResponsesStreamingResponse::Completed { response } => {
-                            debug!("OpenAI SSE received {}", data);
-
-                            let mut function_calls = vec![];
-
-                            for item in response.output {
-                                match item {
-                                    ResponsesStreamingOutput::Message {
-                                        id: _,
-                                        status: _,
-                                        role: _,
-                                        content: _,
-                                    } => {}
-                                    ResponsesStreamingOutput::Reasoning { id: _ } => {}
-                                    ResponsesStreamingOutput::FunctionCall {
-                                        id: _,
-                                        status: _,
-                                        arguments,
-                                        call_id,
-                                        name,
-                                    } => {
-                                        let function_call =
-                                            get_function_call(bot, &name, &call_id, &arguments)
-                                                .await?;
-
-                                        function_calls.push(function_call);
-                                    }
-                                    ResponsesStreamingOutput::Unknown => {
-                                        error!("OpenAI SSE unknown output: {:?}", data);
-                                    }
-                                }
-                            }
-
+                            let (text, function_calls) = response_output(bot, &response).await?;
                             if function_calls.is_empty() {
-                                let sent = gpt_message.stream_message(bot, Some("`[DONE]`")).await;
-
-                                if sent.is_err() {
-                                    error!("OpenAI SSE stream {} sending failed: {:?}", data, sent);
+                                if gpt_message.message.trim().is_empty() {
+                                    gpt_message.message = text;
                                 }
-
-                                break;
-                            } else {
-                                openai_body.previous_response_id = Some(response.id);
-                                openai_body.input.extend(function_calls);
-
-                                let builder = openai_req
-                                    .post(chat_url)
-                                    .bearer_auth(bot.openai_key())
-                                    .json(&openai_body);
-
-                                openai_sse = EventSource::new(builder)?;
+                                ensure!(
+                                    !gpt_message.message.trim().is_empty(),
+                                    "OpenAI returned no response text"
+                                );
+                                gpt_message.stream_message(bot, Some("`[DONE]`")).await?;
+                                return Ok(());
                             }
+                            body.previous_response_id = Some(response.id);
+                            body.input.extend(function_calls);
+                            events = EventSource::new(
+                                client.post(url).bearer_auth(bot.openai_key()).json(&body),
+                            )?;
+                        }
+                        ResponsesStreamingResponse::Failed
+                        | ResponsesStreamingResponse::Incomplete
+                        | ResponsesStreamingResponse::Error => {
+                            bail!("OpenAI reported an unsuccessful response");
                         }
                         ResponsesStreamingResponse::Created
                         | ResponsesStreamingResponse::InProgress
@@ -484,164 +496,76 @@ pub async fn handle<B: Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Resul
                         | ResponsesStreamingResponse::ContentPartAdded
                         | ResponsesStreamingResponse::ContentPartDone
                         | ResponsesStreamingResponse::FunctionCallArgumentsDelta
-                        | ResponsesStreamingResponse::FunctionCallArgumentsDone => {
-                            // Ignore
-                        }
-                        ResponsesStreamingResponse::Unknown => {
-                            error!("OpenAI SSE unknown response: {:?}", data);
-                        }
+                        | ResponsesStreamingResponse::FunctionCallArgumentsDone
+                        | ResponsesStreamingResponse::Unknown => {}
                     }
-                }
-                Err(e) => {
-                    match e {
-                        reqwest_eventsource::Error::StreamEnded => {
-                            debug!("OpenAI SSE stream ended");
-                        }
-                        reqwest_eventsource::Error::InvalidStatusCode(code, err_res) => {
-                            error!("OpenAI SSE error code: {}", code);
-
-                            match err_res.text().await {
-                                Ok(body) => error!("OpenAI SSE error res body: {}", body),
-                                Err(e) => error!("Failed to read error res body: {:?}", e),
-                            }
-                        }
-                        _ => {
-                            error!("OpenAI SSE error: {:?}", e);
-                        }
-                    }
-
-                    break;
                 }
             }
         }
-
-        Ok(())
+        bail!("OpenAI stream ended before completing the response")
     } else {
-        let mut openai_res = openai_builder.send().await;
-
+        let mut request = request;
         loop {
-            if openai_res.is_err() {
-                let debug_str = "OpenAI API call failed";
-                debug!("{}", debug_str);
-
-                return bot
-                    .send_message(
-                        &msg.channel,
-                        Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(
-                            debug_str,
-                        ))]),
-                        reply_event,
-                        None,
-                    )
-                    .await
-                    .and(Ok(()));
-            }
-
-            let res = openai_res.unwrap();
-            let res_len = res.content_length().unwrap_or(0);
-
-            let res_bytes = res.bytes().await;
-
-            if res_bytes.is_err() {
-                let debug_str = format!("OpenAI result bytes error: {}", res_len);
-                debug!("{}", debug_str);
-
-                return bot
-                    .send_message(
-                        &msg.channel,
-                        Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(
-                            &debug_str,
-                        ))]),
-                        reply_event,
-                        None,
-                    )
-                    .await
-                    .and(Ok(()));
-            }
-
-            let res_bytes = res_bytes.unwrap();
-
-            let res_body_result = serde_json::from_slice::<ResponsesCompletedResponse>(&res_bytes);
-
-            if res_body_result.is_err() {
-                let debug_str = format!(
-                    "OpenAI result json parsing failed: {:?}",
-                    String::from_utf8(res_bytes.to_vec()).unwrap()
-                );
-
-                error!("{}", debug_str);
-
-                return bot
-                    .send_message(
-                        &msg.channel,
-                        Message::Blocks(&[BlockElement::Section(SectionBlock::new_text(
-                            &debug_str,
-                        ))]),
-                        reply_event,
-                        None,
-                    )
-                    .await
-                    .and(Ok(()));
-            }
-
-            let res_body = res_body_result.unwrap();
-
-            let mut res_texts = vec![];
-            let mut function_calls = vec![];
-
-            for output in &res_body.output {
-                match output {
-                    ResponsesStreamingOutput::Message {
-                        id: _,
-                        status: _,
-                        role: _,
-                        content,
-                    } => res_texts.push(content[0].text.clone()),
-                    ResponsesStreamingOutput::Reasoning { id: _ } => {}
-                    ResponsesStreamingOutput::FunctionCall {
-                        id: _,
-                        status: _,
-                        arguments,
-                        call_id,
-                        name,
-                    } => {
-                        let function_call =
-                            get_function_call(bot, name, call_id, arguments).await?;
-
-                        function_calls.push(function_call);
-                    }
-                    ResponsesStreamingOutput::Unknown => {
-                        error!("OpenAI SSE unknown output: {:?}", res_body);
-                    }
-                }
-            }
-
-            if !function_calls.is_empty() {
-                openai_body.previous_response_id = Some(res_body.id);
-                openai_body.input.extend(function_calls);
-
-                let openai_builder = openai_req
-                    .post(chat_url)
-                    .bearer_auth(bot.openai_key())
-                    .json(&openai_body);
-
-                openai_res = openai_builder.send().await;
-
-                continue;
-            } else {
-                let res_text = res_texts.join("\n");
-
+            let response: ResponsesCompletedResponse = request
+                .send()
+                .await
+                .context("OpenAI request failed")?
+                .error_for_status()
+                .context("OpenAI returned an unsuccessful HTTP status")?
+                .json()
+                .await
+                .context("OpenAI returned an invalid response")?;
+            let (text, function_calls) = response_output(bot, &response).await?;
+            if function_calls.is_empty() {
+                ensure!(!text.trim().is_empty(), "OpenAI returned no response text");
                 return GptMessageManager::send_message_static(
                     bot,
-                    &res_text,
+                    &text,
                     &msg.channel,
                     &reply_event,
                 )
                 .await
-                .and(Ok(()));
+                .map(|_| ());
             }
+            body.previous_response_id = Some(response.id);
+            body.input.extend(function_calls);
+            request = client.post(url).bearer_auth(bot.openai_key()).json(&body);
         }
     }
+}
+
+async fn response_output<B: Bot>(
+    bot: &B,
+    response: &ResponsesCompletedResponse,
+) -> anyhow::Result<(String, Vec<ResponsesInput>)> {
+    ensure!(
+        response.status == "completed",
+        "OpenAI response did not complete"
+    );
+    let mut texts = vec![];
+    let mut function_calls = vec![];
+    for output in &response.output {
+        match output {
+            ResponsesStreamingOutput::Message {
+                status, content, ..
+            } => {
+                ensure!(status == "completed", "OpenAI message did not complete");
+                texts.extend(content.iter().map(|part| part.text.as_str()));
+            }
+            ResponsesStreamingOutput::FunctionCall {
+                name,
+                call_id,
+                arguments,
+                status,
+                ..
+            } => {
+                ensure!(status == "completed", "OpenAI tool call did not complete");
+                function_calls.push(get_function_call(bot, name, call_id, arguments).await?);
+            }
+            ResponsesStreamingOutput::Reasoning { .. } | ResponsesStreamingOutput::Unknown => {}
+        }
+    }
+    Ok((texts.join("\n"), function_calls))
 }
 
 fn parse_input_text(command_str: &str, gpt_prefix_exists: bool) -> String {
@@ -778,7 +702,7 @@ async fn get_function_call<B: Bot>(
     arguments: &str,
 ) -> anyhow::Result<ResponsesInput> {
     let arguments: HashMap<String, serde_json::Value> =
-        serde_json::from_str(arguments).unwrap_or_else(|_| HashMap::new());
+        serde_json::from_str(arguments).context("OpenAI returned invalid tool arguments")?;
 
     let tool_result = bot.call_mcp_tool(name, arguments).await?;
 
@@ -830,13 +754,9 @@ impl<'a> GptMessageManager<'a> {
                     &self.reply_event,
                     temp_message,
                 )
-                .await;
+                .await?;
 
-            if sent.is_err() {
-                return Err(sent.err().unwrap());
-            }
-
-            self.ts = String::from(&sent.unwrap().ts.unwrap());
+            self.ts = String::from(&sent.ts.context("Slack returned no message timestamp")?);
 
             Ok(())
         }
@@ -871,9 +791,13 @@ impl<'a> GptMessageManager<'a> {
                 reply_event.clone(),
                 None,
             )
-            .await;
-
-        sent
+            .await?;
+        ensure!(
+            sent.ok,
+            "Slack rejected the ChatGPT message: {:?}",
+            sent.error
+        );
+        Ok(sent)
     }
 
     async fn send_message(
@@ -907,12 +831,12 @@ impl<'a> GptMessageManager<'a> {
                 },
                 ts,
             )
-            .await;
-
-        if sent.is_err() {
-            error!("Edit message failed: {:?}", sent.err());
-        }
-
+            .await?;
+        ensure!(
+            sent.ok,
+            "Slack rejected the ChatGPT update: {:?}",
+            sent.error
+        );
         Ok(())
     }
 

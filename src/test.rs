@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::RwLock,
 };
 
@@ -31,11 +31,26 @@ impl<'a> From<Message<'a>> for MockMessage {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct MockReaction {
+    pub action: &'static str,
+    pub channel: String,
+    pub ts: String,
+    pub name: String,
+}
+
 #[derive(Default)]
 pub struct MockBot {
     messages: RwLock<Vec<(String, MockMessage)>>,
     pub files: RwLock<HashMap<String, bytes::Bytes>>,
     pub forbid_tool_metadata: bool,
+    pub reactions: RwLock<Vec<MockReaction>>,
+    pub fail_add_reaction: bool,
+    pub fail_remove_reaction: bool,
+    pub post_results: RwLock<VecDeque<anyhow::Result<PostMessageResponse>>>,
+    pub edit_results: RwLock<VecDeque<anyhow::Result<EditMessageResponse>>>,
+    pub activity: RwLock<Vec<&'static str>>,
+    pub sent_replies: RwLock<Vec<Option<ReplyMessageEvent>>>,
 }
 
 impl MockBot {
@@ -76,6 +91,8 @@ impl super::Bot for MockBot {
         reply: Option<ReplyMessageEvent>,
         unfurl_links: Option<bool>,
     ) -> anyhow::Result<PostMessageResponse> {
+        self.activity.write().unwrap().push("send_message");
+        self.sent_replies.write().unwrap().push(reply.clone());
         let mut messages = self
             .messages
             .write()
@@ -88,11 +105,14 @@ impl super::Bot for MockBot {
 
         messages.push((channel.to_string(), message.into()));
 
+        if let Some(result) = self.post_results.write().unwrap().pop_front() {
+            return result;
+        }
         Ok(PostMessageResponse {
             ok: true,
             channel: None,
             error: None,
-            ts: None,
+            ts: Some(serde_json::from_value(serde_json::json!("1673464746.000001")).unwrap()),
         })
     }
 
@@ -102,6 +122,7 @@ impl super::Bot for MockBot {
         message: Message<'_>,
         ts: &str,
     ) -> anyhow::Result<EditMessageResponse> {
+        self.activity.write().unwrap().push("edit_message");
         let mut messages = self
             .messages
             .write()
@@ -115,12 +136,43 @@ impl super::Bot for MockBot {
 
         messages.push((channel.to_string(), message.into()));
 
+        if let Some(result) = self.edit_results.write().unwrap().pop_front() {
+            return result;
+        }
         Ok(EditMessageResponse {
             ok: true,
             channel: None,
             error: None,
             ts: None,
         })
+    }
+
+    async fn add_reaction(&self, channel: &str, ts: &str, name: &str) -> anyhow::Result<()> {
+        self.activity.write().unwrap().push("add_reaction");
+        self.reactions.write().unwrap().push(MockReaction {
+            action: "add",
+            channel: channel.to_string(),
+            ts: ts.to_string(),
+            name: name.to_string(),
+        });
+        if self.fail_add_reaction {
+            return Err(anyhow!("Could not add reaction"));
+        }
+        Ok(())
+    }
+
+    async fn remove_reaction(&self, channel: &str, ts: &str, name: &str) -> anyhow::Result<()> {
+        self.activity.write().unwrap().push("remove_reaction");
+        self.reactions.write().unwrap().push(MockReaction {
+            action: "remove",
+            channel: channel.to_string(),
+            ts: ts.to_string(),
+            name: name.to_string(),
+        });
+        if self.fail_remove_reaction {
+            return Err(anyhow!("Could not remove reaction"));
+        }
+        Ok(())
     }
 
     async fn get_conversation_replies(

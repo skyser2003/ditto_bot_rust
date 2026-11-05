@@ -26,7 +26,23 @@ model that supports image input; the default is `gpt-4o-mini`.
 The bot downloads private Slack images using its Slack token and sends their
 contents to the OpenAI Responses API as base64 data URLs. This works with both
 streaming and non-streaming responses (`USE_GPT_STREAM`). If an image cannot be
-read or is too large, the bot replies with an error before calling OpenAI.
+read or is too large, the bot replies with a generic error before calling OpenAI.
+
+## ChatGPT processing reaction
+
+The bot adds ⏳ (`:hourglass_flowing_sand:`) to the user's request while ChatGPT
+is working, including image downloads, streaming replies, and tool calls. It
+removes the reaction when processing ends, including on errors, without adding
+a completion emoji. In threads, it reacts to the message that invoked ChatGPT.
+
+The Slack bot token needs the `reactions:write` OAuth scope. Add the scope and
+reinstall the Slack app in your workspace if necessary. Reaction failures are
+logged and do not prevent the ChatGPT response.
+
+If ChatGPT cannot complete a response, the bot replies: `An error occurred while
+processing your request. Please try again.` Diagnostic details stay in the logs.
+The processing reaction is removed in a final cleanup step after either success
+or failure, even if sending the error notification also fails.
 
 ## ChatGPT reply formatting
 

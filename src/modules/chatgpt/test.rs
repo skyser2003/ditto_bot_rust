@@ -3,7 +3,13 @@ use std::convert::TryFrom;
 use serde_json::{json, Value};
 
 use super::*;
-use crate::{slack, test::MockBot, MessageEvent};
+use crate::{
+    slack,
+    test::{MockBot, MockReaction},
+    MessageEvent,
+};
+
+mod errors;
 
 const PNG_URL: &str = "https://files.slack.com/files-pri/T123-F123/image.png";
 const PNG_DATA: &str = "data:image/png;base64,aW1hZ2U=";
@@ -212,13 +218,13 @@ async fn image_download_failure_is_reported_for_commands_without_prompt_text() {
     for text in ["<@>", "<@> gpt", "<@> describe this"] {
         let bot = bot();
         let msg = event(text, vec![file("F404", "image/png", PNG_URL)]);
-        handle(&bot, &msg).await.unwrap();
+        handle(&bot, &msg).await.unwrap_err();
+        assert_processing_reactions(&bot, &msg);
         let messages = bot.dump_messages().unwrap();
         assert_eq!(messages.len(), 1, "command: {:?}", text);
         match &messages[0].1 {
             crate::test::MockMessage::Text(text) => {
-                assert!(text.contains("Unable to read an attached image"));
-                assert!(text.contains("F404"));
+                assert_eq!(text, ERROR_MESSAGE);
             }
             _ => panic!("Expected an image error message"),
         }
@@ -231,6 +237,7 @@ async fn image_attachment_requires_bot_mention() {
     let msg = event("describe this", vec![file("F404", "image/png", PNG_URL)]);
     handle(&bot, &msg).await.unwrap();
     assert!(bot.dump_messages().unwrap().is_empty());
+    assert!(bot.reactions.read().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -435,6 +442,7 @@ async fn empty_mod_command_returns_usage_before_chat_setup() {
     bot.forbid_tool_metadata = true;
     let msg = event("<@> mod", vec![]);
     handle(&bot, &msg).await.unwrap();
+    assert!(bot.reactions.read().unwrap().is_empty());
     let messages = bot.dump_messages().unwrap();
     assert_eq!(messages.len(), 1);
     let blocks = rendered_blocks(&messages[0].1);
@@ -443,4 +451,60 @@ async fn empty_mod_command_returns_usage_before_chat_setup() {
         blocks[1]["text"]["text"],
         "Usage: mention the bot followed by mod <text>."
     );
+}
+
+fn assert_processing_reactions(bot: &MockBot, msg: &MessageEvent) {
+    let expected = ["add", "remove"].map(|action| MockReaction {
+        action,
+        channel: msg.channel.clone(),
+        ts: msg.ts.clone(),
+        name: "hourglass_flowing_sand".to_string(),
+    });
+    assert_eq!(bot.reactions.read().unwrap().as_slice(), &expected);
+}
+
+#[tokio::test]
+async fn processing_reaction_is_cleaned_up_on_request_errors() {
+    let mut bot = bot();
+    bot.forbid_tool_metadata = true;
+    let mut msg = event("<@> gpt hello", vec![]);
+    msg.thread_ts = Some("1673464700.000001".to_string());
+    let error = handle(&bot, &msg).await.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Chat tool metadata must not be requested"
+    );
+    assert_processing_reactions(&bot, &msg);
+}
+
+#[tokio::test]
+async fn reaction_errors_do_not_block_responses_or_replace_request_errors() {
+    for (fail_add_reaction, fail_remove_reaction) in [(true, false), (false, true), (true, true)] {
+        let mut bot = bot();
+        bot.fail_add_reaction = fail_add_reaction;
+        bot.fail_remove_reaction = fail_remove_reaction;
+        let msg = event("<@> gpt describe", vec![file("F404", "image/png", PNG_URL)]);
+        handle(&bot, &msg).await.unwrap_err();
+        assert_processing_reactions(&bot, &msg);
+        assert_eq!(bot.dump_messages().unwrap().len(), 1);
+
+        bot.reactions.write().unwrap().clear();
+        bot.forbid_tool_metadata = true;
+        let error = handle(&bot, &msg).await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Chat tool metadata must not be requested"
+        );
+        assert_processing_reactions(&bot, &msg);
+    }
+}
+
+#[tokio::test]
+async fn empty_mentions_do_not_get_processing_reactions() {
+    for text in ["<@>", "<@> \n\t"] {
+        let bot = bot();
+        handle(&bot, &event(text, vec![])).await.unwrap();
+        assert!(bot.reactions.read().unwrap().is_empty());
+        assert!(bot.dump_messages().unwrap().is_empty());
+    }
 }

@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::RwLock,
 };
 
@@ -200,9 +200,7 @@ impl super::Bot for MockBot {
         Err(anyhow!("Not implemented!"))
     }
 
-    async fn get_all_tools_metadata(
-        &self,
-    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>> {
+    async fn get_all_tools_metadata(&self) -> anyhow::Result<Vec<crate::McpToolMetadata>> {
         if self.forbid_tool_metadata {
             return Err(anyhow!("Chat tool metadata must not be requested"));
         }

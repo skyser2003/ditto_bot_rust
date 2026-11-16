@@ -2,6 +2,8 @@ use std::convert::TryFrom;
 
 use crate::{slack, MessageEvent};
 
+mod mcp_tool_schema;
+
 struct MessageEventFixture;
 
 impl MessageEventFixture {

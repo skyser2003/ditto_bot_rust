@@ -47,6 +47,7 @@ pub mod test;
 mod tests;
 
 type McpClient = RunningService<RoleClient, ()>;
+type McpToolMetadata = (String, HashMap<String, (String, String)>, HashSet<String>);
 
 pub struct MessageEvent {
     is_bot: bool,
@@ -255,9 +256,7 @@ pub trait Bot {
 
     async fn download_file(&self, file: &slack::SlackFile) -> anyhow::Result<Bytes>;
 
-    async fn get_all_tools_metadata(
-        &self,
-    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>>;
+    async fn get_all_tools_metadata(&self) -> anyhow::Result<Vec<McpToolMetadata>>;
 
     async fn call_mcp_tool(
         &self,
@@ -277,6 +276,56 @@ struct DittoBot {
 }
 
 impl DittoBot {
+    fn tool_metadata(
+        server_name: &str,
+        tool: &rmcp::model::Tool,
+    ) -> anyhow::Result<McpToolMetadata> {
+        let unified_name = format!("{}_{}", server_name, tool.name);
+        let empty_properties = serde_json::Map::new();
+        let properties = match tool.input_schema.get("properties") {
+            Some(value) => value.as_object().with_context(|| {
+                format!("MCP tool {} properties must be an object", unified_name)
+            })?,
+            None => &empty_properties,
+        };
+        let required = match tool.input_schema.get("required") {
+            Some(value) => {
+                serde_json::from_value::<HashSet<String>>(value.clone()).with_context(|| {
+                    format!(
+                        "MCP tool {} required must be an array of strings",
+                        unified_name
+                    )
+                })?
+            }
+            None => HashSet::new(),
+        };
+        let arguments = properties
+            .iter()
+            .map(|(arg_name, value)| {
+                let parameter = value.as_object().with_context(|| {
+                    format!(
+                        "MCP tool {} parameter {} must be an object",
+                        unified_name, arg_name
+                    )
+                })?;
+                let arg_type = parameter
+                    .get("type")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("string");
+                let description = parameter
+                    .get("description")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("");
+                Ok((
+                    arg_name.clone(),
+                    (arg_type.to_string(), description.to_string()),
+                ))
+            })
+            .collect::<anyhow::Result<HashMap<String, (String, String)>>>()?;
+
+        Ok((unified_name, arguments, required))
+    }
+
     pub async fn new(
         bot_id: String,
         bot_token: String,
@@ -458,9 +507,7 @@ impl Bot for DittoBot {
         slack::download_file(&self.http_client, &self.bot_token, file).await
     }
 
-    async fn get_all_tools_metadata(
-        &self,
-    ) -> anyhow::Result<Vec<(String, HashMap<String, (String, String)>, HashSet<String>)>> {
+    async fn get_all_tools_metadata(&self) -> anyhow::Result<Vec<McpToolMetadata>> {
         let mut datas = vec![];
 
         for (name, client) in self.mcp_clients.iter() {
@@ -470,32 +517,7 @@ impl Bot for DittoBot {
                 .context("Failed to list all tools")?;
 
             for tool in tools {
-                let unified_name = format!("{}_{}", name, tool.name);
-
-                let properties: &serde_json::Map<String, serde_json::Value> =
-                    tool.input_schema["properties"].as_object().unwrap();
-
-                let required = tool.input_schema["required"].as_array().unwrap();
-                let required = required
-                    .iter()
-                    .map(|v| v.as_str().unwrap().to_string())
-                    .collect::<HashSet<_>>();
-
-                let arguments = properties
-                    .keys()
-                    .map(|arg_name| {
-                        let value = properties.get(arg_name).unwrap();
-                        let arg_type = value["type"].as_str().unwrap_or("string");
-                        let description = value["description"].as_str().unwrap_or("");
-
-                        (
-                            arg_name.to_string(),
-                            (arg_type.to_string(), description.to_string()),
-                        )
-                    })
-                    .collect::<HashMap<String, (String, String)>>();
-
-                datas.push((unified_name, arguments, required));
+                datas.push(Self::tool_metadata(name, &tool)?);
             }
         }
 

@@ -1,4 +1,10 @@
-use std::{borrow::Cow, collections::HashMap, env, future::Future, panic::AssertUnwindSafe};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    env,
+    future::Future,
+    panic::AssertUnwindSafe,
+};
 
 use anyhow::{anyhow, bail, ensure, Context};
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -150,6 +156,17 @@ pub enum ResponsesToolOutput {
     FunctionCallOutput { call_id: String, output: String },
 }
 
+impl ResponsesToolOutput {
+    fn parse_arguments(arguments: &str) -> anyhow::Result<HashMap<String, serde_json::Value>> {
+        let mut arguments: HashMap<String, serde_json::Value> =
+            serde_json::from_str(arguments).context("OpenAI returned invalid tool arguments")?;
+        // Strict OpenAI schemas use null for omitted optional arguments. Leave
+        // those arguments out so the MCP server can apply its own defaults.
+        arguments.retain(|_, value| !value.is_null());
+        Ok(arguments)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ResponsesStreamingContent {
@@ -186,6 +203,33 @@ struct FunctionCallParameters {
     required: Vec<String>,
     #[serde(rename = "additionalProperties")]
     additional_properties: bool,
+}
+
+impl FunctionCallParameters {
+    fn new(arguments: HashMap<String, (String, String)>, required: &HashSet<String>) -> Self {
+        Self {
+            type_field: "object".to_string(),
+            required: arguments.keys().cloned().collect(),
+            properties: arguments
+                .into_iter()
+                .map(|(arg_name, (arg_type, description))| {
+                    let type_field = if required.contains(&arg_name) {
+                        vec![arg_type]
+                    } else {
+                        vec![arg_type, "null".to_string()]
+                    };
+                    (
+                        arg_name,
+                        FunctionCallParameter {
+                            type_field,
+                            description,
+                        },
+                    )
+                })
+                .collect(),
+            additional_properties: false,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -362,31 +406,7 @@ async fn respond<B: Bot>(
         let tool_call_body = FunctionCallBody {
             name: unified_name.clone(),
             description: format!("Call tool {}", unified_name),
-            parameters: FunctionCallParameters {
-                type_field: "object".to_string(),
-                required: arguments.keys().cloned().collect(),
-                properties: arguments
-                    .iter()
-                    .map(|(arg_name, (arg_type, description))| {
-                        let is_optional = required.contains(arg_name);
-
-                        let type_field = if is_optional {
-                            vec![arg_type.clone(), "null".to_string()]
-                        } else {
-                            vec![arg_type.clone()]
-                        };
-
-                        (
-                            arg_name.clone(),
-                            FunctionCallParameter {
-                                type_field,
-                                description: description.clone(),
-                            },
-                        )
-                    })
-                    .collect::<HashMap<_, _>>(),
-                additional_properties: false,
-            },
+            parameters: FunctionCallParameters::new(arguments, &required),
             strict: true,
         };
 
@@ -701,8 +721,7 @@ async fn get_function_call<B: Bot>(
     call_id: &str,
     arguments: &str,
 ) -> anyhow::Result<ResponsesInput> {
-    let arguments: HashMap<String, serde_json::Value> =
-        serde_json::from_str(arguments).context("OpenAI returned invalid tool arguments")?;
+    let arguments = ResponsesToolOutput::parse_arguments(arguments)?;
 
     let tool_result = bot.call_mcp_tool(name, arguments).await?;
 

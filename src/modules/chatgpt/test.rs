@@ -10,6 +10,7 @@ use crate::{
 };
 
 mod errors;
+mod tools;
 
 const PNG_URL: &str = "https://files.slack.com/files-pri/T123-F123/image.png";
 const PNG_DATA: &str = "data:image/png;base64,aW1hZ2U=";

@@ -6,13 +6,9 @@ struct ToolFixture;
 
 impl ToolFixture {
     fn parse(schema: &str) -> rmcp::model::Tool {
-        let input_schema =
+        let input_schema: rmcp::model::JsonObject =
             serde_json::from_str(schema).expect("Fixture schema should be valid JSON");
-        rmcp::model::Tool {
-            name: "get_current_time".into(),
-            description: "Test tool".into(),
-            input_schema,
-        }
+        rmcp::model::Tool::new("get_current_time", "Test tool", input_schema)
     }
 }
 

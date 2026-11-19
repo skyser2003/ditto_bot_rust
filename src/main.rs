@@ -12,7 +12,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use log::{debug, error, info, warn};
 use reqwest::StatusCode;
-use rmcp::model::CallToolRequestParam;
+use rmcp::model::CallToolRequestParams;
 use rmcp::service::RunningService;
 use rmcp::transport::TokioChildProcess;
 use rmcp::Peer;
@@ -355,41 +355,37 @@ impl DittoBot {
         }
     }
 
+    async fn connect_mcp_client(command: Command) -> anyhow::Result<McpClient> {
+        Ok(().serve(TokioChildProcess::new(command)?).await?)
+    }
+
     async fn create_mcp_clients(tz: String) -> HashMap<String, McpClient> {
-        let mut results = HashMap::new();
+        let mut time_command = Command::new("uvx");
+        time_command
+            .args(["mcp-server-time", "--local-timezone"])
+            .arg(tz);
 
-        let client1 = async move {
-            ().serve(TokioChildProcess::new(
-                Command::new("uvx")
-                    .arg("mcp-server-time")
-                    .arg("--local-timezone")
-                    .arg(tz),
-            )?)
-            .await
-        }
-        .await;
+        let mut fetch_command = Command::new("uvx");
+        fetch_command.arg("mcp-server-fetch");
 
-        let client2 = async move {
-            ().serve(TokioChildProcess::new(
-                Command::new("uvx").arg("mcp-server-fetch"),
-            )?)
-            .await
-        }
-        .await;
-
-        results.insert("mcp-server-time", client1);
-        results.insert("mcp-server-fetch", client2);
-
-        results
-            .into_iter()
-            .filter_map(|(name, client)| match client {
-                Ok(client) => Some((name.to_string(), client)),
-                Err(e) => {
-                    error!("Failed to create mcp client - {:?}", e);
-                    None
-                }
-            })
-            .collect()
+        IntoIterator::into_iter([
+            (
+                "mcp-server-time",
+                Self::connect_mcp_client(time_command).await,
+            ),
+            (
+                "mcp-server-fetch",
+                Self::connect_mcp_client(fetch_command).await,
+            ),
+        ])
+        .filter_map(|(name, client)| match client {
+            Ok(client) => Some((name.to_string(), client)),
+            Err(e) => {
+                error!("Failed to create mcp client - {:?}", e);
+                None
+            }
+        })
+        .collect()
     }
 }
 
@@ -534,16 +530,8 @@ impl Bot for DittoBot {
             .get(unified_name)
             .ok_or_else(|| anyhow!("MCP tool not found"))?;
 
-        let mut tool_arguments = serde_json::Map::new();
-
-        for (key, value) in arguments.iter() {
-            tool_arguments.insert(key.clone(), value.clone());
-        }
-
-        let params = CallToolRequestParam {
-            name: tool_name.clone(),
-            arguments: Some(tool_arguments),
-        };
+        let params = CallToolRequestParams::new(tool_name.clone())
+            .with_arguments(arguments.into_iter().collect());
 
         let result = client
             .call_tool(params)

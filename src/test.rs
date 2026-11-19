@@ -210,18 +210,12 @@ impl super::Bot for MockBot {
 
 #[tokio::test]
 async fn test_mcp_client1() -> anyhow::Result<()> {
-    use std::borrow::Cow;
-
-    use rmcp::{transport::TokioChildProcess, ServiceExt};
+    use rmcp::model::CallToolRequestParams;
     use tokio::process::Command;
 
-    let client = ()
-        .serve(TokioChildProcess::new(
-            Command::new("npx")
-                .arg("-y")
-                .arg("@modelcontextprotocol/server-everything"),
-        )?)
-        .await?;
+    let mut command = Command::new("npx");
+    command.args(["-y", "@modelcontextprotocol/server-everything"]);
+    let client = crate::DittoBot::connect_mcp_client(command).await?;
 
     let tools = client.list_all_tools().await?;
     let resources = client.list_all_resources().await?;
@@ -241,10 +235,7 @@ async fn test_mcp_client1() -> anyhow::Result<()> {
     );
 
     let res = client
-        .call_tool(rmcp::model::CallToolRequestParam {
-            name: Cow::Borrowed("echo"),
-            arguments: Some(echo_args),
-        })
+        .call_tool(CallToolRequestParams::new("echo").with_arguments(echo_args))
         .await?;
 
     println!("{:?}", res);
@@ -254,21 +245,14 @@ async fn test_mcp_client1() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_mcp_client2() -> anyhow::Result<()> {
-    use std::borrow::Cow;
-
-    use rmcp::{transport::TokioChildProcess, ServiceExt};
+    use rmcp::model::CallToolRequestParams;
     use tokio::process::Command;
 
     let tz = "Asia/Seoul";
 
-    let client = ()
-        .serve(TokioChildProcess::new(
-            Command::new("uvx")
-                .arg("mcp-server-time")
-                .arg("--local-timezone")
-                .arg(tz),
-        )?)
-        .await?;
+    let mut command = Command::new("uvx");
+    command.args(["mcp-server-time", "--local-timezone", tz]);
+    let client = crate::DittoBot::connect_mcp_client(command).await?;
 
     let tools = client.list_all_tools().await?;
 
@@ -283,10 +267,7 @@ async fn test_mcp_client2() -> anyhow::Result<()> {
     );
 
     let res = client
-        .call_tool(rmcp::model::CallToolRequestParam {
-            name: Cow::Borrowed("get_current_time"),
-            arguments: Some(echo_args),
-        })
+        .call_tool(CallToolRequestParams::new("get_current_time").with_arguments(echo_args))
         .await?;
 
     println!("{:?}", res);

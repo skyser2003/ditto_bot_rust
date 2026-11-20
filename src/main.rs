@@ -32,7 +32,7 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
 };
-use tokio::net::TcpStream;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Command;
 use tokio_tungstenite::tungstenite::Utf8Bytes;
 use tokio_tungstenite::MaybeTlsStream;
@@ -579,13 +579,13 @@ impl IntoResponse for HttpResponse {
         match self {
             HttpResponse::Challenge(s) => Response::builder()
                 .status(StatusCode::OK)
-                .body(axum::body::boxed(Body::from(format!("challenge={}", s)))),
+                .body(Body::from(format!("challenge={}", s))),
             HttpResponse::Ok => Response::builder()
                 .status(StatusCode::OK)
-                .body(axum::body::boxed(Body::empty())),
-            HttpResponse::Error(status_code) => Response::builder()
-                .status(status_code)
-                .body(axum::body::boxed(Body::empty())),
+                .body(Body::empty()),
+            HttpResponse::Error(status_code) => {
+                Response::builder().status(status_code).body(Body::empty())
+            }
         }
         .unwrap_or_else(|_| unsafe { std::hint::unreachable_unchecked() })
     }
@@ -803,7 +803,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = axum::Router::new().route(
         "/",
-        axum::routing::on(MethodFilter::POST | MethodFilter::GET, http_handler),
+        axum::routing::on(MethodFilter::POST.or(MethodFilter::GET), http_handler),
     );
 
     let mcp_clients = DittoBot::create_mcp_clients(tz).await;
@@ -870,15 +870,16 @@ async fn main() -> anyhow::Result<()> {
                     handle_for_ctrl.graceful_shutdown(None);
                 });
 
-                axum_server::bind_rustls("0.0.0.0:14475".parse()?, config)
+                let address = "0.0.0.0:14475".parse::<std::net::SocketAddr>()?;
+                axum_server::bind_rustls(address, config)
                     .handle(handle)
                     .serve(app.into_make_service())
                     .await?;
             }
         } else {
             info!("Start to bind address with HTTP.");
-            axum::Server::bind(&"0.0.0.0:8082".parse()?)
-                .serve(app.into_make_service())
+            let listener = TcpListener::bind("0.0.0.0:8082").await?;
+            axum::serve(listener, app)
                 .with_graceful_shutdown(futures::FutureExt::map(tokio::signal::ctrl_c(), |_| ()))
                 .await?;
         }

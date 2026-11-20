@@ -13,28 +13,29 @@ edition = "2018"
 regex = "1"
 url = "2"
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0.21"
 async-trait = "0.1"
 bytes = "1.8"
-base64 = "0.22"
+base64 = "0.23.1"
 pulldown-cmark = { version = "0.13", default-features = false }
-linkify = "0.10"
+linkify = "0.11.0"
 once_cell = "1"
 
-reqwest = { version = "0.11", features = [
+reqwest = { version = "0.12.28", features = [
+	"http2",
 	"json",
 	"rustls-tls",
 	"stream",
 ], default-features = false }
 tokio = { version = "1", features = ["full"] }
 
-axum = { version = "0.6.20", features = ["headers"] }
-axum-server = { version = "0.5.1", features = ["tls-rustls"], optional = true }
-tower-http = { version = "0.4.4", features = ["auth"] }
+axum = "0.8.9"
+axum-server = { version = "0.9.2", features = ["tls-rustls-no-provider"], optional = true }
+tower-http = { version = "0.7.1", features = ["auth"] }
 tower = { version = "0.5", features = ["util"] }
 http = "1.1"
 hyper = "1.5"
-tokio-tungstenite = { version = "0.26.2", features = [
+tokio-tungstenite = { version = "0.30.0", features = [
 	"rustls-tls-webpki-roots",
 ] }
 
@@ -47,15 +48,15 @@ rustls = { version = "0.23.46", default-features = false, features = [
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13.0"
+sha2 = "0.11.1"
 
 futures = "0.3"
-rand = "0.8"
+rand = "0.10.4"
 
 log = "0.4.11"
-env_logger = "0.10.0"
-reqwest-eventsource = "0.5.0"
+env_logger = "0.11.11"
+reqwest-eventsource = "0.6.0"
 percent-encoding = "2.3.1"
 
 rmcp = { version = "3.11.0", default-features = false, features = [

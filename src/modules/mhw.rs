@@ -1,6 +1,5 @@
 use crate::slack;
 use crate::Message;
-use rand::{thread_rng, Rng};
 
 struct MonsterHunterData<'a> {
     keywords: &'a [&'a str],
@@ -49,7 +48,7 @@ const MHW_DATA: &[MonsterHunterData<'static>] = &[
 
 pub async fn handle<B: crate::Bot>(bot: &B, msg: &crate::MessageEvent) -> anyhow::Result<()> {
     // TODO: Remove hard coded value
-    if thread_rng().gen_range(0..100) < 35 {
+    if rand::random_range(0..100) < 35 {
         for data in MHW_DATA {
             for keyword in data.keywords {
                 if msg.text.contains(keyword) {

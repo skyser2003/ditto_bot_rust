@@ -22,12 +22,10 @@ impl TestApi {
                 async move { (status, [("content-type", content_type)], body) }
             }),
         );
+        listener.set_nonblocking(true).unwrap();
+        let listener = tokio::net::TcpListener::from_std(listener).unwrap();
         let task = tokio::spawn(async move {
-            axum::Server::from_tcp(listener)
-                .unwrap()
-                .serve(app.into_make_service())
-                .await
-                .unwrap();
+            axum::serve(listener, app).await.unwrap();
         });
         Self { url, task }
     }
